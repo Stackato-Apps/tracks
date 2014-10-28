@@ -1,6 +1,12 @@
 # Tracks: a GTD(TM) web application, built with Ruby on Rails
 Copyright (C) 2004-2014 rousette.org.uk
 
+## Deploying to Stackato
+
+1. `git clone https://github.com/Stackato-Apps/tracks`
+2. let the stackato_setup.sh script generate config/site.yml OR `cp config/site.yml.tmpl config/site.yml` and configure as needed
+3. `stackato push -n`
+
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
 as published by the Free Software Foundation; either version 2

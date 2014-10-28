@@ -1,0 +1,11 @@
+applications:
+- name: tracks
+  services:
+    ${name}-db:
+      type: postgresql
+  stackato:
+    hooks:
+      pre-push:
+      - bash stackato_setup.sh
+      post-staging:
+      - rake db:migrate
