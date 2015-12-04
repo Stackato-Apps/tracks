@@ -1,5 +1,6 @@
 applications:
 - name: tracks
+  memory: 256M
   services:
     ${name}-db:
       type: postgresql
