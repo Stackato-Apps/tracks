@@ -11,7 +11,7 @@
 * Contributors: https://github.com/TracksApp/tracks/wiki/Contributors
 * Version: 2.3.0
 
-## Deploying to Stackato
+## Deploying to HPE Helion Stackato
 
 1. let the stackato_setup.sh script generate config/site.yml OR `cp config/site.yml.tmpl config/site.yml` and configure the `salt` and `secret_token` values 
 2. `stackato push -n`
