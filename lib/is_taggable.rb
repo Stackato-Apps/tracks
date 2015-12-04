@@ -9,10 +9,10 @@ module IsTaggable
       has_many :taggings, :as => :taggable
       has_many :tags, :through => :taggings do
         def to_s
-          self.map(&:name).sort.join(Tag::JOIN_DELIMITER)
+          self.to_a.map(&:name).sort.join(Tag::JOIN_DELIMITER)
         end
         def all_except_starred
-          self.reject{|tag| tag.name == Todo::STARRED_TAG_NAME}
+          self.to_a.reject{|tag| tag.name == Todo::STARRED_TAG_NAME}
         end
       end
       
@@ -31,7 +31,7 @@ module IsTaggable
   
         # Transactions may not be ideal for you here; be aware.
         Tag.transaction do
-          current = tags.map(&:name)
+          current = tags.to_a.map(&:name)
           _add_tags(list - current)
           _remove_tags(current - list)
         end
@@ -49,9 +49,9 @@ module IsTaggable
       def _add_tags incoming
         tag_cast_to_string(incoming).each do |tag_name|
           # added following check to prevent empty tags from being saved (which will fail)
-          unless tag_name.blank?
+          if tag_name.present?
             begin
-              tag = Tag.find_or_create_by_name(tag_name)
+              tag = Tag.where(:name => tag_name).first_or_create
               raise Tag::Error, "tag could not be saved: #{tag_name}" if tag.new_record?
               tags << tag
             rescue ActiveRecord::StatementInvalid => e
@@ -80,7 +80,11 @@ module IsTaggable
         end
       end
 
-      def tag_cast_to_string obj
+      def tag_cast_to_string(obj)
+        tag_array_from_obj(obj).flatten.compact.map(&:downcase).uniq
+      end
+
+      def tag_array_from_obj(obj)
         case obj
         when Array
           obj.map! { |item| get_tag_name_from_item(item) }
@@ -88,7 +92,7 @@ module IsTaggable
           obj.split(Tag::DELIMITER).map { |tag_name| tag_name.strip.squeeze(" ") }
         else
           raise "Invalid object of class #{obj.class} as tagging method parameter"
-        end.flatten.compact.map(&:downcase).uniq
+        end
       end
             
     end

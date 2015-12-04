@@ -277,12 +277,6 @@ a.show_successors:hover, a.link_to_successors:hover {background-image: image-url
     a:hover { color: #CCC; }
 }
 
-#develop-notify-bar {
-    line-height:0.5;
-    background-image: image-url('construction.gif');
-    background-repeat: repeat-x;
-}
-
 #topbar {
     position: fixed;
     top: 0px;
@@ -345,7 +339,7 @@ a.show_successors:hover, a.link_to_successors:hover {background-image: image-url
     width: 14px;
     border: 0px;
     background: image-url('collapse_expand.png') no-repeat left top;
-    	
+
     .context_collapsed & { background-position: left bottom; }
 }
 
@@ -491,7 +485,7 @@ input.item-checkbox {
 a.footer_link {
     color: #cc3334;
     font-style: normal;
-    
+
     &:hover {
         color: #fff;
         background-color: #cc3334 !important;

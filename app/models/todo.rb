@@ -1,5 +1,8 @@
 class Todo < ActiveRecord::Base
 
+  MAX_DESCRIPTION_LENGTH = 300
+  MAX_NOTES_LENGTH = 60000
+
   before_save :render_note
   after_save :save_predecessors
 
@@ -11,118 +14,116 @@ class Todo < ActiveRecord::Base
 
   # Tag association
   include IsTaggable
-  
+
   # Dependencies associations
   has_many :predecessor_dependencies, :foreign_key => 'predecessor_id', :class_name => 'Dependency', :dependent => :destroy
   has_many :successor_dependencies,   :foreign_key => 'successor_id',   :class_name => 'Dependency', :dependent => :destroy
   has_many :predecessors, :through => :successor_dependencies
   has_many :successors,   :through => :predecessor_dependencies
-  has_many :uncompleted_predecessors, :through => :successor_dependencies,
-    :source => :predecessor, :conditions => ['NOT (todos.state = ?)', 'completed']
-  has_many :pending_successors, :through => :predecessor_dependencies,
-    :source => :successor, :conditions => ['todos.state = ?', 'pending']
-    
+  has_many :uncompleted_predecessors, -> {where('NOT (todos.state = ?)', 'completed')}, :through => :successor_dependencies,
+    :source => :predecessor
+  has_many :pending_successors, -> {where('todos.state = ?', 'pending')}, :through => :predecessor_dependencies,
+    :source => :successor
+
   # scopes for states of this todo
-  scope :active, :conditions => { :state => 'active' }
-  scope :active_or_hidden, :conditions => ["todos.state = ? OR todos.state = ?", 'active', 'project_hidden']
-  scope :not_completed, :conditions =>  ['NOT (todos.state = ?)', 'completed']
-  scope :completed, :conditions =>  ["todos.state = ?", 'completed']
-  scope :deferred, :conditions => ["todos.state = ?", 'deferred']
-  scope :blocked, :conditions => ['todos.state = ?', 'pending']
-  scope :pending, :conditions => ['todos.state = ?', 'pending']
-  scope :deferred_or_blocked, :conditions => ["(todos.state = ?) OR (todos.state = ?)", "deferred", "pending"]
-  scope :not_deferred_or_blocked, :conditions => ["(NOT todos.state=?) AND (NOT todos.state = ?)", "deferred", "pending"]
-  scope :hidden,
-    :joins => "INNER JOIN contexts c_hidden ON c_hidden.id = todos.context_id",
-    :conditions => ["todos.state = ? OR (c_hidden.hide = ? AND (todos.state = ? OR todos.state = ? OR todos.state = ?))",
-    'project_hidden', true, 'active', 'deferred', 'pending']
-  scope :not_hidden,
-    :joins => "INNER JOIN contexts c_hidden ON c_hidden.id = todos.context_id",
-    :conditions => ['NOT(todos.state = ? OR (c_hidden.hide = ? AND (todos.state = ? OR todos.state = ? OR todos.state = ?)))',
-    'project_hidden', true, 'active', 'deferred', 'pending']
+  scope :active, -> { where state: 'active' }
+  scope :active_or_hidden, -> { where "todos.state = ? OR todos.state = ?", 'active', 'project_hidden' }
+  scope :not_completed, -> { where 'NOT (todos.state = ?)', 'completed' }
+  scope :completed, -> { where "todos.state = ?", 'completed' }
+  scope :deferred, -> { where "todos.state = ?", 'deferred' }
+  scope :blocked, -> {where 'todos.state = ?', 'pending' }
+  scope :pending, -> {where 'todos.state = ?', 'pending' }
+  scope :deferred_or_blocked, -> { where "(todos.state = ?) OR (todos.state = ?)", "deferred", "pending" }
+  scope :not_deferred_or_blocked, -> { where "(NOT todos.state=?) AND (NOT todos.state = ?)", "deferred", "pending" }
+  scope :hidden, -> {
+    joins("INNER JOIN contexts c_hidden ON c_hidden.id = todos.context_id").
+    where("todos.state = ? OR (c_hidden.state = ? AND (todos.state = ? OR todos.state = ? OR todos.state = ?))", 'project_hidden', 'hidden', 'active', 'deferred', 'pending') }
+  scope :not_hidden, -> {
+    joins("INNER JOIN contexts c_hidden ON c_hidden.id = todos.context_id").
+    where('NOT(todos.state = ? OR (c_hidden.state = ? AND (todos.state = ? OR todos.state = ? OR todos.state = ?)))','project_hidden', 'hidden', 'active', 'deferred', 'pending') }
 
   # other scopes
-  scope :are_due, :conditions => ['NOT (todos.due IS NULL)']
-  scope :with_tag, lambda { |tag_id| joins("INNER JOIN taggings ON todos.id = taggings.taggable_id").where("taggings.tag_id = ? ", tag_id) }
-  scope :with_tags, lambda { |tag_ids| where("EXISTS(SELECT * from taggings t WHERE t.tag_id IN (?) AND t.taggable_id=todos.id AND t.taggable_type='Todo')", tag_ids) }
-  # scope :of_user, lambda { |user_id| {:conditions => ["todos.user_id = ? ", user_id] } }
-  scope :completed_after, lambda { |date| where("todos.completed_at > ?", date) }
-  scope :completed_before, lambda { |date| where("todos.completed_at < ?", date) }
-  scope :created_after, lambda { |date| where("todos.created_at > ?", date) }
-  scope :created_before, lambda { |date| where("todos.created_at < ?", date) }
+  scope :are_due,           -> { where 'NOT (todos.due IS NULL)' }
+  scope :due_today,         -> { where("todos.due <= ?", Time.zone.now) }
+  scope :with_tag,          lambda { |tag_id| joins("INNER JOIN taggings ON todos.id = taggings.taggable_id").where("taggings.tag_id = ? AND taggings.taggable_type='Todo'", tag_id) }
+  scope :with_tags,         lambda { |tag_ids| where("EXISTS(SELECT * from taggings t WHERE t.tag_id IN (?) AND t.taggable_id=todos.id AND t.taggable_type='Todo')", tag_ids) }
+  scope :completed_after,   lambda { |date| where("todos.completed_at > ?", date) }
+  scope :completed_before,  lambda { |date| where("todos.completed_at < ?", date) }
+  scope :created_after,     lambda { |date| where("todos.created_at > ?", date) }
+  scope :created_before,    lambda { |date| where("todos.created_at < ?", date) }
+  scope :created_or_completed_after,  lambda { |date| where("todos.created_at > ? or todos.completed_at > ?", date, date) }
+
+  def self.due_after(date)
+    where('todos.due > ?', date)
+  end
+
+  def self.due_between(start_date, end_date)
+    where('todos.due > ? AND todos.due <= ?', start_date, end_date)
+  end
 
   STARRED_TAG_NAME = "starred"
   DEFAULT_INCLUDES = [ :project, :context, :tags, :taggings, :pending_successors, :uncompleted_predecessors, :recurring_todo ]
 
   # state machine
   include AASM
-  aasm_column :state
-  aasm.initial_state Proc.new { |t| (t.show_from && t.user && (t.show_from > t.user.date)) ? :deferred : :active}
+  aasm_initial_state = Proc.new { |t| (t.show_from && t.user && (t.show_from > t.user.date)) ? :deferred : :active}
 
-  aasm.state :active
-  aasm.state :project_hidden
-  aasm.state :completed, :enter => Proc.new { |t| t.completed_at = Time.zone.now }, :exit => Proc.new { |t| t.completed_at = nil}
-  aasm.state :deferred, :exit => Proc.new { |t| t[:show_from] = nil }
-  aasm.state :pending
+  aasm :column => :state do
 
-  aasm.event :defer do
-    transitions :to => :deferred, :from => [:active]
+    state :active
+    state :project_hidden
+    state :completed, :before_enter => Proc.new { |t| t.completed_at = Time.zone.now }, :before_exit => Proc.new { |t| t.completed_at = nil}
+    state :deferred,  :before_exit => Proc.new { |t| t[:show_from] = nil }
+    state :pending
+
+    event :defer do
+      transitions :to => :deferred, :from => [:active]
+    end
+
+    event :complete do
+      transitions :to => :completed, :from => [:active, :project_hidden, :deferred, :pending]
+    end
+
+    event :activate do
+      transitions :to => :active, :from => [:project_hidden, :deferred]
+      transitions :to => :active, :from => [:completed], :guard => :no_uncompleted_predecessors?
+      transitions :to => :active, :from => [:pending], :guard => :no_uncompleted_predecessors_or_deferral?
+      transitions :to => :pending, :from => [:completed], :guard => :uncompleted_predecessors?
+      transitions :to => :deferred, :from => [:pending], :guard => :no_uncompleted_predecessors?
+    end
+
+    event :hide do
+      transitions :to => :project_hidden, :from => [:active, :deferred, :pending]
+    end
+
+    event :unhide do
+      transitions :to => :deferred, :from => [:project_hidden], :guard => Proc.new{|t| t.show_from.present? }
+      transitions :to => :pending, :from => [:project_hidden], :guard => :uncompleted_predecessors?
+      transitions :to => :active, :from => [:project_hidden]
+    end
+
+    event :block do
+      transitions :to => :pending, :from => [:active, :deferred, :project_hidden]
+    end
   end
-
-  aasm.event :complete do
-    transitions :to => :completed, :from => [:active, :project_hidden, :deferred, :pending]
-  end
-
-  aasm.event :activate do
-    transitions :to => :active, :from => [:project_hidden, :deferred]
-    transitions :to => :active, :from => [:completed], :guard => :no_uncompleted_predecessors?
-    transitions :to => :active, :from => [:pending], :guard => :no_uncompleted_predecessors_or_deferral?
-    transitions :to => :pending, :from => [:completed], :guard => :uncompleted_predecessors?
-    transitions :to => :deferred, :from => [:pending], :guard => :guard_for_transition_from_deferred_to_pending
-  end
-
-  aasm.event :hide do
-    transitions :to => :project_hidden, :from => [:active, :deferred, :pending]
-  end
-
-  aasm.event :unhide do
-    transitions :to => :deferred, :from => [:project_hidden], :guard => Proc.new{|t| !t.show_from.blank? }
-    transitions :to => :pending, :from => [:project_hidden], :guard => :uncompleted_predecessors?
-    transitions :to => :active, :from => [:project_hidden]
-  end
-
-  aasm.event :block do
-    transitions :to => :pending, :from => [:active, :deferred, :project_hidden]
-  end
-
-  attr_protected :user
 
   # Description field can't be empty, and must be < 100 bytes Notes must be <
   # 60,000 bytes (65,000 actually, but I'm being cautious)
   validates_presence_of :description
-  validates_length_of :description, :maximum => 100
-  validates_length_of :notes, :maximum => 60000, :allow_nil => true
+  validates_length_of :description, :maximum => MAX_DESCRIPTION_LENGTH
+  validates_length_of :notes, :maximum => MAX_NOTES_LENGTH, :allow_nil => true
   validates_presence_of :show_from, :if => :deferred?
   validates_presence_of :context
   validate :check_show_from_in_future
-  validate :check_circular_dependencies
 
   def check_show_from_in_future
     if show_from_changed? # only check on change of show_from
-      if !show_from.blank? && (show_from < user.date)
+      if show_from.present? && (show_from < user.date)
         errors.add("show_from", I18n.t('models.todo.error_date_must_be_future'))
       end
     end
   end
-  
-  def check_circular_dependencies
-    unless @predecessor_array.nil? # Only validate predecessors if they changed
-      @predecessor_array.each do |todo|
-        errors.add("Depends on:", "Adding '#{todo.specification}' would create a circular dependency") if is_successor?(todo)
-      end
-    end
-  end
-  
+
   def initialize(*args)
     super(*args)
     @predecessor_array = nil # Used for deferred save of predecessors
@@ -139,7 +140,11 @@ class Todo < ActiveRecord::Base
   end
 
   def uncompleted_predecessors?
-    return !uncompleted_predecessors.all.empty?
+    return !uncompleted_predecessors.empty?
+  end
+
+  def should_be_blocked?
+    return !( uncompleted_predecessors.empty? || state == 'project_hidden' )
   end
 
   def guard_for_transition_from_deferred_to_pending
@@ -193,6 +198,7 @@ class Todo < ActiveRecord::Base
   def remove_predecessor(predecessor)
     self.predecessors.delete(predecessor)
     if self.predecessors.empty?
+      self.reload  # reload predecessors
       self.not_part_of_hidden_container? ? self.activate! : self.hide!
     else
       save!
@@ -245,16 +251,19 @@ class Todo < ActiveRecord::Base
   end
 
   def show_from=(date)
-    # parse Date objects into the proper timezone
-    date = user.at_midnight(date) if (date.is_a? Date)
+    if deferred? && date.blank?
+      activate
+    else
+      # parse Date objects into the proper timezone
+      date = date.in_time_zone.beginning_of_day if (date.is_a? Date)
 
-    # show_from needs to be set before state_change because of "bug" in aasm.
-    # If show_from is not set, the todo will not validate and thus aasm will not save
-    # (see http://stackoverflow.com/questions/682920/persisting-the-state-column-on-transition-using-rubyist-aasm-acts-as-state-machi)
-    self[:show_from] = date
+      # show_from needs to be set before state_change because of "bug" in aasm.
+      # If show_from is not set, the todo will not validate and thus aasm will not save
+      # (see http://stackoverflow.com/questions/682920/persisting-the-state-column-on-transition-using-rubyist-aasm-acts-as-state-machi)
+      self[:show_from] = date
 
-    activate! if deferred? && date.blank?
-    defer! if active? && !date.blank? && date > user.date
+      defer if active? && date.present? && show_from > user.date
+    end
   end
 
   def starred?
@@ -282,7 +291,7 @@ class Todo < ActiveRecord::Base
     return unless predecessor_list.kind_of? String
 
     @predecessor_array=predecessor_list.split(",").inject([]) do |list, todo_id|
-      predecessor = self.user.todos.find_by_id( todo_id.to_i ) unless todo_id.blank?
+      predecessor = self.user.todos.find( todo_id.to_i ) if todo_id.present?
       list <<  predecessor unless predecessor.nil?
       list
     end
@@ -299,7 +308,7 @@ class Todo < ActiveRecord::Base
 
   # activate todos that should be activated if the current todo is completed
   def activate_pending_todos
-    pending_todos = successors.select {|t| t.uncompleted_predecessors.empty?}
+    pending_todos = successors.select { |t| t.uncompleted_predecessors.empty? and !t.completed? }
     pending_todos.each {|t| t.activate! }
     return pending_todos
   end
@@ -324,7 +333,7 @@ class Todo < ActiveRecord::Base
     # value will be a string. In that case convert to array
     deps = [deps] unless deps.class == Array
 
-    deps.each { |dep| self.add_predecessor(self.user.todos.find_by_id(dep.to_i)) unless dep.blank? }
+    deps.each { |dep| self.add_predecessor(self.user.todos.find(dep.to_i)) if dep.present? }
   end
 
   alias_method :original_context=, :context=
@@ -332,7 +341,7 @@ class Todo < ActiveRecord::Base
     if value.is_a? Context
       self.original_context=(value)
     else
-      c = Context.find_by_name(value[:name])
+      c = Context.where(:name => value[:name]).first
       c = Context.create(value) if c.nil?
       self.original_context=(c)
     end
@@ -348,13 +357,16 @@ class Todo < ActiveRecord::Base
     if value.is_a? Project
       self.original_project=(value)
     elsif !(value.nil? || value.is_a?(NullProject))
-      p = Project.find_by_name(value[:name])
+      p = Project.where(:name => value[:name]).first
       p = Project.create(value) if p.nil?
-
       self.original_project=(p)
     else
       self.original_project=value
     end
+  end
+
+  def has_project?
+    return ! (project_id.nil? || project.is_a?(NullProject))
   end
 
   # used by the REST API. <tags> will also work, this is renamed to add_tags in TodosController::TodoCreateParamsHelper::initialize
@@ -365,48 +377,6 @@ class Todo < ActiveRecord::Base
     end
   end
 
-  # Rich Todo API
-  def self.from_rich_message(user, default_context_id, description, notes)
-    fields = description.match(/([^>@]*)@?([^>]*)>?(.*)/)
-    description = fields[1].strip
-    context = fields[2].strip
-    project = fields[3].strip
-
-    context = nil if context == ""
-    project = nil if project == ""
-
-    context_id = default_context_id
-    unless(context.nil?)
-      found_context = user.contexts.active.where("name like ?", "%#{context}%").first
-      found_context = user.contexts.where("name like ?", "%#{context}%").first if !found_context
-      context_id = found_context.id if found_context
-    end
-
-    unless user.contexts.exists? context_id
-      raise(CannotAccessContext, "Cannot access a context that does not belong to this user.")
-    end
-
-    project_id = nil
-    unless(project.blank?)
-      if(project[0..3].downcase == "new:")
-        found_project = user.projects.build
-        found_project.name = project[4..255+4].strip
-        found_project.save!
-      else
-        found_project = user.projects.active.find_by_namepart(project)
-        found_project = user.projects.find_by_namepart(project) if found_project.nil?
-      end
-      project_id = found_project.id unless found_project.nil?
-    end
-
-    todo = user.todos.build
-    todo.description = description
-    todo.raw_notes = notes
-    todo.context_id = context_id
-    todo.project_id = project_id unless project_id.nil?
-    return todo
-  end
-
   def render_note
     unless self.notes.nil?
       self.rendered_notes = Tracks::Utils.render_text(self.notes)
@@ -414,5 +384,28 @@ class Todo < ActiveRecord::Base
       self.rendered_notes = nil
     end
   end
-  
+
+  def self.import(filename, params, user)
+    default_context = user.contexts.order('id').first
+
+    count = 0
+    CSV.foreach(filename, headers: true) do |row|
+      unless find_by_description_and_user_id row[params[:description].to_i], user.id
+        todo = new
+        todo.user = user
+        todo.description = row[params[:description].to_i].truncate MAX_DESCRIPTION_LENGTH
+        todo.context = Context.find_by_name_and_user_id(row[params[:context].to_i], user.id) || default_context
+        todo.project = Project.find_by_name_and_user_id(row[params[:project].to_i], user.id) if row[params[:project].to_i].present?
+        todo.state = row[params[:completed_at].to_i].present? ? 'completed' : 'active'
+        todo.notes = row[params[:notes].to_i].truncate MAX_NOTES_LENGTH if row[params[:notes].to_i].present?
+        todo.created_at = row[params[:created_at].to_i] if row[params[:created_at].to_i].present?
+        todo.due = row[params[:due].to_i]
+        todo.completed_at = row[params[:completed_at].to_i] if row[params[:completed_at].to_i].present?
+        todo.save!
+        count += 1
+      end
+    end
+    count
+  end
+
 end

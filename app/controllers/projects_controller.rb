@@ -18,9 +18,8 @@ class ProjectsController < ApplicationController
       if params[:only_active_with_no_next_actions]
         @projects = current_user.projects.active.select { |p| count_undone_todos(p) == 0  }
       else
-        @projects = current_user.projects.all
+        @projects = current_user.projects
       end
-      @new_project = current_user.projects.build
       @active_projects = current_user.projects.active
       @hidden_projects = current_user.projects.hidden
       respond_to do |format|
@@ -31,6 +30,7 @@ class ProjectsController < ApplicationController
           @completed_count = current_user.projects.completed.count
           @no_projects = current_user.projects.empty?
           current_user.projects.cache_note_counts
+          @new_project = current_user.projects.build
         end
         format.m     do
           @completed_projects = current_user.projects.completed
@@ -38,11 +38,7 @@ class ProjectsController < ApplicationController
           cookies[:mobile_url]= {:value => request.fullpath, :secure => SITE_CONFIG['secure_cookies']}
         end
         format.xml   { render :xml => @projects.to_xml( :except => :user_id )  }
-        format.rss   do
-          @feed_title = I18n.t('models.project.feed_title')
-          @feed_description = I18n.t('models.project.feed_description', :username => current_user.display_name)
-        end
-        format.atom  do
+        format.any(:rss, :atom) do
           @feed_title = I18n.t('models.project.feed_title')
           @feed_description = I18n.t('models.project.feed_description', :username => current_user.display_name)
         end
@@ -61,8 +57,8 @@ class ProjectsController < ApplicationController
   def review
     @source_view = params['_source_view'] || 'review'
     @page_title = t('projects.list_reviews')
-    @projects = current_user.projects.all
-    @contexts = current_user.contexts.all
+    @projects = current_user.projects.load
+    @contexts = current_user.contexts.load
     @projects_to_review = current_user.projects.select  {|p| p.needs_review?(current_user)}
     @stalled_projects = current_user.projects.select  {|p| p.stalled?}
     @blocked_projects = current_user.projects.select  {|p| p.blocked?}
@@ -99,7 +95,7 @@ class ProjectsController < ApplicationController
   def set_reviewed
     @project.last_reviewed = Time.zone.now
     @project.save
-    
+
     case @source_view
     when "project"
       redirect_to :action => 'show'
@@ -128,18 +124,20 @@ class ProjectsController < ApplicationController
     init_data_for_sidebar unless mobile?
     @page_title = t('projects.page_title', :project => @project.name)
 
-    @not_done = @project.todos.active_or_hidden.includes(Todo::DEFAULT_INCLUDES)
-    @deferred = @project.todos.deferred.includes(Todo::DEFAULT_INCLUDES)
-    @pending = @project.todos.pending.includes(Todo::DEFAULT_INCLUDES)
+    @not_done_todos = @project.todos.active_or_hidden.includes(Todo::DEFAULT_INCLUDES)
+    @deferred_todos = @project.todos.deferred.includes(Todo::DEFAULT_INCLUDES)
+    @pending_todos = @project.todos.pending.includes(Todo::DEFAULT_INCLUDES)
+    @contexts_to_show = current_user.contexts.active
+    @projects_to_show = [@project]
 
     @done = {}
     @done = @project.todos.completed.
       reorder("todos.completed_at DESC").
       limit(current_user.prefs.show_number_completed).
-      includes(Todo::DEFAULT_INCLUDES) unless current_user.prefs.show_number_completed == 0
+      includes(Todo::DEFAULT_INCLUDES) unless @max_completed == 0
 
-    @count = @not_done.size
-    @down_count = @count + @deferred.size + @pending.size
+    @down_count = @not_done_todos.size + @deferred_todos.size + @pending_todos.size
+    @count=@down_count
     @next_project = current_user.projects.next_from(@project)
     @previous_project = current_user.projects.previous_from(@project)
     @default_tags = @project.default_tags
@@ -159,9 +157,9 @@ class ProjectsController < ApplicationController
       end
       format.xml   do
         render :xml => @project.to_xml(:except => :user_id) { |xml|
-          xml.not_done { @not_done.each { |child| child.to_xml(:builder => xml, :skip_instruct => true) } }
-          xml.deferred { @deferred.each { |child| child.to_xml(:builder => xml, :skip_instruct => true) } }
-          xml.pending { @pending.each { |child| child.to_xml(:builder => xml, :skip_instruct => true) } }
+          xml.not_done { @not_done_todos.each { |child| child.to_xml(:builder => xml, :skip_instruct => true) } }
+          xml.deferred { @deferred_todos.each { |child| child.to_xml(:builder => xml, :skip_instruct => true) } }
+          xml.pending { @pending_todos.each { |child| child.to_xml(:builder => xml, :skip_instruct => true) } }
           xml.done { @done.each { |child| child.to_xml(:builder => xml, :skip_instruct => true) } }
         }
       end
@@ -173,7 +171,7 @@ class ProjectsController < ApplicationController
       render_failure "Expected post format is valid xml like so: <project><name>project name</name></project>.", 400
       return
     end
-    @project = current_user.projects.build(params['project'])
+    @project = current_user.projects.build(project_params)
     @go_to_project = params['go_to_project']
     @saved = @project.save
     @project_not_done_counts = { @project.id => 0 }
@@ -212,7 +210,7 @@ class ProjectsController < ApplicationController
       params['project']['name'] = params['value']
     end
 
-    @project.attributes = params['project']
+    @project.attributes = project_params
     @saved = @project.save
     if @saved
       @project.transition_to(@new_state) if @state_changed
@@ -221,7 +219,7 @@ class ProjectsController < ApplicationController
         update_state_counts
         init_data_for_sidebar
         init_project_hidden_todo_counts(['project'])
-        
+
         template = 'projects/update'
 
       # TODO: are these params ever set? or is this dead code?
@@ -303,24 +301,11 @@ class ProjectsController < ApplicationController
   end
 
   def done_todos
-    @source_view = 'project'
-    @project = current_user.projects.find(params[:id])
-    @page_title = t('projects.completed_tasks_title', :project_name => @project.name)
-
-    @done_today, @done_this_week, @done_this_month = DoneTodos.done_todos_for_container(@project)
-    @count = @done_today.size + @done_this_week.size + @done_this_month.size
-
-    render :template => 'todos/done'
+    done_todos_for current_user.projects.find(params[:id])
   end
 
   def all_done_todos
-    @source_view = 'project'
-    @project = current_user.projects.find(params[:id])
-    @page_title = t('projects.all_completed_tasks_title', :project_name => @project.name)
-
-    @done = @project.todos.completed.paginate :page => params[:page], :per_page => 20, :order => 'completed_at DESC', :include => Todo::DEFAULT_INCLUDES
-    @count = @done.size
-    render :template => 'todos/all_done'
+    all_done_todos_for current_user.projects.find(params[:id])
   end
 
   protected
@@ -333,7 +318,7 @@ class ProjectsController < ApplicationController
     @show_hidden_projects = @hidden_projects_count > 0
     @show_completed_projects = @completed_projects_count > 0
   end
-  
+
   def set_project_from_params
     @project = current_user.projects.find_by_params(params)
   end
@@ -349,10 +334,16 @@ class ProjectsController < ApplicationController
     default_context_name = p['default_context_name']
     p.delete('default_context_name')
 
-    unless default_context_name.blank?
-      default_context = current_user.contexts.find_or_create_by_name(default_context_name)
+    if default_context_name.present?
+      default_context = current_user.contexts.where(:name => default_context_name).first_or_create
       p['default_context_id'] = default_context.id
     end
+  end
+
+  private
+
+  def project_params
+    params.require(:project).permit(:name, :position, :user_id, :description, :state, :default_context_id, :default_tags)
   end
 
 end

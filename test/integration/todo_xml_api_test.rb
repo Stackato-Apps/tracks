@@ -1,6 +1,6 @@
-require File.expand_path(File.dirname(__FILE__) + '/../test_helper')
+require 'test_helper'
 
-class TodoXmlApiTest < ActionController::IntegrationTest
+class TodoXmlApiTest < ActionDispatch::IntegrationTest
   @@valid_postdata = "<todo><description>this will succeed</description><context_id type='integer'>10</context_id><project_id type='integer'>4</project_id></todo>"
 
   def setup
@@ -17,7 +17,7 @@ class TodoXmlApiTest < ActionController::IntegrationTest
     get '/tickler.xml', {}, {}
     assert_response 401
 
-    get "/tickler.xml", {}, {'HTT_AUTHORIZATION' => "Basic " + Base64.encode64("wrong:wrong"),'ACCEPT' => 'application/xml'}
+    get "/tickler.xml", {}, {'HTTP_AUTHORIZATION' => "Basic " + Base64.encode64("wrong:wrong"),'ACCEPT' => 'application/xml'}
     assert_response 401
   end
 
@@ -30,6 +30,19 @@ class TodoXmlApiTest < ActionController::IntegrationTest
   def test_get_tickler_omits_user_id
     authenticated_get_xml "/tickler.xml", @user.login, @password, {}
     assert_no_tag :tag => "user_id"
+  end
+
+  def test_get_index_with_only_active_todos
+    authenticated_get_xml "/todos.xml", @user.login, @password, {}
+    assert_response 200
+
+    all_todo_count = assigns['xml_todos']
+
+    authenticated_get_xml "/todos.xml?limit_to_active_todos=1", @user.login, @password, {}
+    assert_response 200
+
+    active_todo_count = assigns['xml_todos']
+    assert all_todo_count != active_todo_count, "active should be less than all todos"
   end
 
   def test_create_todo_with_show_from
@@ -59,9 +72,9 @@ class TodoXmlApiTest < ActionController::IntegrationTest
 </todo>"
 
     assert_response :success
-    todo = @user.todos.find_by_description("this will succeed 2.0")
+    todo = @user.todos.where(:description => "this will succeed 2.0").first
     assert_not_nil todo
-    assert !todo.uncompleted_predecessors.empty?
+    assert !todo.uncompleted_predecessors.empty?, "should have predecessors"
   end
 
   def test_post_create_todo_with_single_dependency
@@ -76,7 +89,7 @@ class TodoXmlApiTest < ActionController::IntegrationTest
 </todo>"
 
     assert_response :success
-    todo = @user.todos.find_by_description("this will succeed 2.1")
+    todo = @user.todos.where(:description => "this will succeed 2.1").first
     assert_not_nil todo
     assert !todo.uncompleted_predecessors.empty?
   end
@@ -95,7 +108,7 @@ class TodoXmlApiTest < ActionController::IntegrationTest
 </todo>"
 
     assert_response :success
-    todo = @user.todos.find_by_description("this will succeed 3")
+    todo = @user.todos.where(:description => "this will succeed 3").first
     assert_not_nil todo
     assert_equal "starred, starred1, starred2", todo.tag_list
     assert todo.starred?
@@ -113,7 +126,7 @@ class TodoXmlApiTest < ActionController::IntegrationTest
 </todo>"
 
     assert_response :success
-    todo = @user.todos.find_by_description("this will succeed 3.1")
+    todo = @user.todos.where(:description => "this will succeed 3.1").first
     assert_not_nil todo
     assert_equal "tracks", todo.tag_list
   end
@@ -133,7 +146,7 @@ class TodoXmlApiTest < ActionController::IntegrationTest
 </todo>"
 
     assert_response :success
-    todo = @user.todos.find_by_description("this will succeed 3")
+    todo = @user.todos.where(:description => "this will succeed 3").first
     assert_not_nil todo
     assert_equal "bar, bingo, foo", todo.tag_list
     authenticated_post_xml_to_todo_create "
@@ -149,7 +162,7 @@ class TodoXmlApiTest < ActionController::IntegrationTest
 </todo>"
 
     assert_response :success
-    todo = @user.todos.find_by_description("this will succeed 4")
+    todo = @user.todos.where(:description => "this will succeed 4").first
     assert_not_nil todo
     assert_equal "bar, bingo, foo", todo.tag_list
   end
@@ -165,7 +178,7 @@ class TodoXmlApiTest < ActionController::IntegrationTest
 </todo>"
 
     assert_response :success
-    todo = @user.todos.find_by_description("this will succeed 4")
+    todo = @user.todos.where(:description => "this will succeed 4").first
     assert_not_nil todo
     assert_not_nil todo.context
     assert_equal todo.context.name, "@SomeNewContext"
@@ -182,7 +195,7 @@ class TodoXmlApiTest < ActionController::IntegrationTest
 </todo>"
 
     assert_response :success
-    todo = @user.todos.find_by_description("this will succeed 4")
+    todo = @user.todos.where(:description => "this will succeed 4").first
     assert_not_nil todo
     assert_not_nil todo.context
     assert_equal contexts(:office).name, todo.context.name
@@ -200,7 +213,7 @@ class TodoXmlApiTest < ActionController::IntegrationTest
 </todo>"
 
     assert_response :success
-    todo = @user.todos.find_by_description("this will succeed 5")
+    todo = @user.todos.where(:description => "this will succeed 5").first
     assert_not_nil todo
     assert_not_nil todo.project
     assert_equal todo.project.name, "Make even more money"
@@ -217,7 +230,7 @@ class TodoXmlApiTest < ActionController::IntegrationTest
 </todo>"
 
     assert_response :success
-    todo = @user.todos.find_by_description("this will succeed 5")
+    todo = @user.todos.where(:description => "this will succeed 5").first
     assert_not_nil todo
     assert_not_nil todo.project
     assert_equal projects(:timemachine).name, todo.project.name

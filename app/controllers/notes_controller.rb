@@ -3,7 +3,7 @@ class NotesController < ApplicationController
   before_filter :set_source_view
 
   def index
-    @all_notes = current_user.notes.all
+    @all_notes = current_user.notes
     @count = @all_notes.size
     @page_title = "TRACKS::All notes"
     @source_view = 'note_list'
@@ -24,7 +24,7 @@ class NotesController < ApplicationController
 
   def create
     @note = current_user.notes.build
-    @note.attributes = params["note"]
+    @note.attributes = note_params
 
     @saved = @note.save
 
@@ -45,7 +45,7 @@ class NotesController < ApplicationController
 
   def update
     @note = current_user.notes.find(params['id'])
-    @note.attributes = params["note"]
+    @note.attributes = note_params
     @saved = @note.save
     respond_to do |format|
       format.html
@@ -56,7 +56,7 @@ class NotesController < ApplicationController
   def destroy
     @note = current_user.notes.find(params['id'])
     @note.destroy
-    
+
     respond_to do |format|
       format.html
       format.js { @down_count = current_user.notes.size }
@@ -67,6 +67,12 @@ class NotesController < ApplicationController
 
   def set_source_view
     @source_view = params['_source_view'] || 'note'
+  end
+
+  private
+
+  def note_params
+    params.require(:note).permit(:project_id, :body)
   end
 
 end

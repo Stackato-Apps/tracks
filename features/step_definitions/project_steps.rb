@@ -4,8 +4,8 @@ end
 
 Given /^I have an outdated project "([^"]*)" with (\d+) todos$/ do |project_name, num_todos|
   step "I have a project \"#{project_name}\" with #{num_todos} todos"
-  @project = @current_user.projects.find_by_name(project_name)
-  @project.last_reviewed = @current_user.time - @current_user.prefs.review_period.days-1
+  @project = @current_user.projects.where(:name => project_name).first
+  @project.last_reviewed = UserTime.new(@current_user).time - @current_user.prefs.review_period.days-1
   @project.save
 end
 
@@ -19,8 +19,8 @@ Given /^I have a project "([^"]*)" with (\d+) active actions and (\d+) deferred 
 end
 
 Given /^I have a project "([^"]*)" with (\d+) (todo|active todo|deferred todo)s prefixed by "([^\"]*)"$/ do |project_name, num_todos, state, prefix|
-  @context = @current_user.contexts.find_or_create_by_name("Context A")
-  @project = @current_user.projects.find_or_create_by_name(project_name)
+  @context = @current_user.contexts.where(:name => "Context A").first_or_create
+  @project = @current_user.projects.where(:name => project_name).first_or_create
   # acts_as_list adds at top by default, but that is counter-intuitive when reading scenario's, so reverse this
   @project.move_to_bottom
 
@@ -41,8 +41,8 @@ Given /^I have a project "([^"]*)" with (\d+) (todos|active todos|deferred todos
 end
 
 Given /^there exists a project (?:|called )"([^"]*)" for user "([^"]*)"$/ do |project_name, user_name|
-  user = User.find_by_login(user_name)
-  user.should_not be_nil
+  user = User.where(:login => user_name).first
+  expect(user).to_not be_nil
   @project = user.projects.create!(:name => project_name)
   # acts_as_list adds at top by default, but that is counter-intuitive when reading scenario's, so reverse this
   @project.move_to_bottom
@@ -73,7 +73,7 @@ Given /^I have a (completed|hidden) project called "([^"]*)"$/ do |state, projec
   step "I have a project called \"#{project_name}\""
   @project.send(state=="completed" ? "complete!" : "hide!")
   @project.reload
-  assert @project.send(state=="completed" ? "completed?" : "hidden?")
+  expect(@project.send(state=="completed" ? "completed?" : "hidden?")).to be true
 end
 
 Given /^I have (\d+) completed projects$/ do |number_of_projects|
@@ -101,8 +101,8 @@ Given /^I have a project "([^\"]*)" with (.*) notes?$/ do |project_name, num|
 end
 
 Given /^the default tags for "(.*?)" are "(.*?)"$/ do |project_name, default_tags|
-  project = @current_user.projects.find_by_name(project_name)
-  project.should_not be_nil
+  project = @current_user.projects.where(:name => project_name).first
+  expect(project).to_not be_nil
   
   project.default_tags = default_tags
   project.save!
@@ -110,12 +110,12 @@ end
 
 When /^I open the project edit form$/ do
   click_link "link_edit_project_#{@project.id}"
-  page.should have_css("button#submit_project_#{@project.id}", :visible => true)
+  expect(page).to have_css("button#submit_project_#{@project.id}", :visible => true)
 end
 
 When /^I cancel the project edit form$/ do
   click_link "cancel_project_#{@project.id}"
-  page.should_not have_css("submit_project_#{@project.id}")
+  expect(page).to_not have_css("submit_project_#{@project.id}")
   wait_for_animations_to_end
 end
 
@@ -146,44 +146,44 @@ When /^I edit the default context to "([^"]*)"$/ do |default_context|
 end
 
 When /^I edit the project name of "([^"]*)" to "([^"]*)"$/ do |project_current_name, project_new_name|
-  @project = @current_user.projects.find_by_name(project_current_name)
-  @project.should_not be_nil
+  @project = @current_user.projects.where(:name => project_current_name).first
+  expect(@project).to_not be_nil
   step "I edit the project name to \"#{project_new_name}\""
 end
 
 When /^I try to edit the project name of "([^"]*)" to "([^"]*)"$/ do |project_current_name, project_new_name|
-  @project = @current_user.projects.find_by_name(project_current_name)
-  @project.should_not be_nil
+  @project = @current_user.projects.where(:name => project_current_name).first
+  expect(@project).to_not be_nil
   step "I try to edit the project name to \"#{project_new_name}\""
 end
 
 When /^I edit the project name in place to be "([^"]*)"$/ do |new_project_name|
-  page.find("div#project_name").click
+  page.find("span#project_name").click
   fill_in "value", :with => new_project_name
   click_button "Ok"
 end
 
 When /^I click to edit the project name in place$/ do
-  page.find("div#project_name").click
+  page.find("span#project_name").click
 end
 
 When /^I edit the project settings$/ do
-  @project.should_not be_nil
+  expect(@project).to_not be_nil
 
   click_link "link_edit_project_#{@project.id}"
-  page.should have_xpath("//div[@id='edit_project_#{@project.id}']/form//button[@id='submit_project_#{@project.id}']")
+  expect(page).to have_xpath("//div[@id='edit_project_#{@project.id}']/form//button[@id='submit_project_#{@project.id}']")
 end
 
 When /^I close the project settings$/ do
-  @project.should_not be_nil
+  expect(@project).to_not be_nil
   click_link "Cancel"
   wait_for_ajax
   wait_for_animations_to_end
 end
 
 When /^I edit the project state of "([^"]*)" to "([^"]*)"$/ do |project_name, state_name|
-  project = @current_user.projects.find_by_name(project_name)
-  project.should_not be_nil
+  project = @current_user.projects.where(:name => project_name).first
+  expect(project).to_not be_nil
 
   edit_project_settings(project) do
     choose "project_state_#{state_name}"
@@ -191,8 +191,8 @@ When /^I edit the project state of "([^"]*)" to "([^"]*)"$/ do |project_name, st
 end
 
 When /^I edit project "([^"]*)" and mark the project as reviewed$/ do |project_name|
-  project = @current_user.projects.find_by_name(project_name)
-  project.should_not be_nil
+  project = @current_user.projects.where(:name => project_name).first
+  expect(project).to_not be_nil
   
   open_project_edit_form(project)
   click_link "reviewed_project_#{project.id}"
@@ -207,23 +207,20 @@ When /^I add a note "([^"]*)" to the project$/ do |note_body|
   submit_button = "div.widgets button#submit_note"
 
   click_link "Add a note"
-  page.should have_css submit_button
+  expect(page).to have_css submit_button
   fill_in "note[body]", :with => note_body
   
   elem = find(submit_button)
-  elem.should_not be_nil  
+  expect(elem).to_not be_nil
   elem.click
 
-  wait_until do
-    !elem.visible?
-  end
-
+  expect(page).to_not have_css(submit_button, visible: true)
 end
 
 When /^I click on the first note icon$/ do
-  @project.should_not be_nil
+  expect(@project).to_not be_nil
   @note = @project.notes.first # assume first note is also first on screen
-  @note.should_not be_nil
+  expect(@note).to_not be_nil
 
   click_link "link_note_#{@note.id}"
 end
@@ -234,17 +231,6 @@ When /^I cancel adding a note to the project$/ do
   click_link "neg_edit_form_note"
 end
 
-Then /^I should (see|not see) empty message for (todos|deferred todos|completed todos) of project/ do |visible, state|
-  css = "wrong state"
-  css = "div#p#{@project.id}empty-nd" if state == "todos"
-  css = "div#tickler-empty-nd"        if state == "deferred todos"
-  css = "div#empty-d"                 if state == "completed todos"
-  
-  elem = find(css, :visible=>false)
-  elem.should_not be_nil
-  elem.send(visible=="see" ? "should" : "should_not", be_visible)
-end
-
 Then /^I edit the default tags to "([^"]*)"$/ do |default_tags|
   edit_project(@project) do
     fill_in "project[default_tags]", :with => default_tags
@@ -253,50 +239,48 @@ end
 
 Then /^I should be able to change the project name in place$/ do
   # Note that this is not changing the project name
-  page.should have_css("div#project_name>form>input")
-  page.find("div#project_name > form > button[type=cancel]").click
-  page.should_not have_css("div#project_name>form>input")
+  expect(page).to have_css("span#project_name>form>input")
+  page.find("span#project_name > form > button[type=cancel]").click
+  expect(page).to_not have_css("span#project_name>form>input")
 end
 
 Then /^I should not be able to change the project name in place$/ do
   step "I click to edit the project name in place"
-  page.should_not have_xpath("//div[@id='project_name']/form/input")
+  expect(page).to_not have_xpath("//span[@id='project_name']/form/input")
 end
 
 Then /^the form for adding a note should not be visible$/ do
-  page.should_not have_css("edit_form_note")
+  expect(page).to_not have_css("edit_form_note")
 end
 
 Then /^I should go to that note page$/ do
   current_path = URI.parse(current_url).path
   note_path = note_path(@note)
-  current_path.should == note_path
+  expect(current_path).to eq(note_path)
 end
 
 Then /^I should see one note in the project$/ do
-  page.should have_xpath("//div[@class='note_wrapper']")
+  expect(page).to have_xpath("//div[@class='note_wrapper']")
 end
 
 Then /^I should see the bold text "([^\"]*)" in the project description$/ do |text_in_bold|
   xpath="//div[@class='project_description']/p/strong"
 
-  page.should have_xpath(xpath)
+  expect(page).to have_xpath(xpath)
   bold_text = page.find(:xpath, xpath).text
-  bold_text.should =~ /#{text_in_bold}/
+  expect(bold_text).to match(/#{text_in_bold}/)
 end
 
 Then /^I should see the italic text "([^\"]*)" in the project description$/ do |text_in_italic|
   xpath="//div[@class='project_description']/p/em"
 
-  page.should have_xpath(xpath)
+  expect(page).to have_xpath(xpath)
   italic_text = page.find(:xpath, xpath).text
-  italic_text.should =~ /#{text_in_italic}/
+  expect(italic_text).to match(/#{text_in_italic}/)
 end
 
 Then /^the project title should be "(.*)"$/ do |title|
-  wait_until do
-    page.find("h2#project_name_container div#project_name").text == title
-  end
+  expect(page).to have_css("h2#project_name_container span#project_name", text: title, exact: true)
 end
 
 Then /^I should see the project name is "([^"]*)"$/ do |project_name|
@@ -306,24 +290,24 @@ end
 Then /^I should (see|not see) the default project settings$/ do |visible|
   default_settings = "This project is active with no default context and with no default tags"
 
-  page.should have_css("div.project_settings", :visible => false)
+  expect(page).to have_css("div.project_settings")
   elem = page.find("div.project_settings")
   
   if visible == "see"
-    elem.should be_visible
-    elem.text.should =~ /#{default_settings}/
+    expect(elem).to be_visible
+    expect(elem.text).to match(/#{default_settings}/)
   else
-    elem.should_not be_visible
+    expect(elem).to_not be_visible
   end
 end
 
 Then /^I should have a project called "([^"]*)"$/ do |project_name|
-  project = @current_user.projects.find_by_name(project_name)
-  project.should_not be_nil
+  project = @current_user.projects.where(:name => project_name).first
+  expect(project).to_not be_nil
 end
 
 Then /^I should have (\d+) todo in project "([^"]*)"$/ do |todo_count, project_name|
-  project = @current_user.projects.find_by_name(project_name)
-  project.should_not be_nil
-  project.todos.count.should == todo_count.to_i
+  project = @current_user.projects.where(:name => project_name).first
+  expect(project).to_not be_nil
+  expect(project.todos.count).to eq(todo_count.to_i)
 end

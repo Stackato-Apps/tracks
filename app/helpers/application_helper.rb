@@ -1,86 +1,45 @@
-# The methods added to this helper will be available to all templates in the
-# application.
 module ApplicationHelper
-  
+
+  def group_view_by_menu_entry
+    # not set, no menu entry
+    return "" if @group_view_by.nil?
+
+    # if view == context, the menu shows Order By Project
+    menu_name = @group_view_by == 'context' ? 'project' : 'context'
+
+    content_tag(:li) do
+      link_to(
+        t("layouts.navigation.group_view_by_#{menu_name}"),
+        '#',
+        {:id => "group_view_by_link", :accesskey => "g", :title => t('layouts.navigation.group_view_by_title'), :x_current_group_by => @group_view_by} )
+    end
+  end
+
+  def container_toggle(id)
+    link_to(
+      image_tag("blank.png", :alt => t('common.collapse_expand')),
+      "#",
+      {:class => "container_toggle", :id => id} )
+  end
+
   def navigation_link(name, options = {}, html_options = nil, *parameters_for_method_reference)
     link_to name, options, html_options
   end
-  
-  def days_from_today(date)
-    (date.in_time_zone.to_date - current_user.time.to_date).to_i
-  end
-  
+
   # Check due date in comparison to today's date Flag up date appropriately with
   # a 'traffic light' colour code
   #
   def due_date(due)
-    return "" if due.nil?
-
-    days = days_from_today(due)
-
-    colors = ['amber','amber','orange','orange','orange','orange','orange','orange']
-    color = :red if days < 0
-    color = :green if days > 7
-    color = colors[days] if color.nil?
-    
-    return content_tag(:a, {:title => format_date(due)}) {
-      content_tag(:span, {:class => color}) {
-        case days
-        when 0
-          t('todos.next_actions_due_date.due_today')
-        when 1
-          t('todos.next_actions_due_date.due_tomorrow')
-        when 2..7
-          if prefs.due_style == Preference.due_styles[:due_on]
-            # TODO: internationalize strftime here
-            t('models.preference.due_on', :date => due.strftime("%A"))
-          else
-            t('models.preference.due_in', :days => days)
-          end
-        else
-          # overdue or due very soon! sound the alarm!
-          if days == -1
-            t('todos.next_actions_due_date.overdue_by', :days => days * -1)
-          elsif days < -1
-            t('todos.next_actions_due_date.overdue_by_plural', :days => days * -1)
-          else
-            # more than a week away - relax
-            t('models.preference.due_in', :days => days)
-          end
-        end
-      }
-    }
+    return DateLabelHelper::DueDateView.new(due, prefs).due_date_html
   end
 
   # Check due date in comparison to today's date Flag up date appropriately with
   # a 'traffic light' colour code Modified method for mobile screen
   #
   def due_date_mobile(due)
-    if due == nil
-      return ""
-    end
-
-    days = days_from_today(due)
-       
-    case days
-    when 0
-      "<span class=\"amber\">"+ format_date(due) + "</span>"
-    when 1
-      "<span class=\"amber\">" + format_date(due) + "</span>"
-      # due 2-7 days away
-    when 2..7
-      "<span class=\"orange\">" + format_date(due) + "</span>"
-    else
-      # overdue or due very soon! sound the alarm!
-      if days < 0
-        "<span class=\"red\">" + format_date(due) +"</span>"
-      else
-        # more than a week away - relax
-        "<span class=\"green\">" + format_date(due) + "</span>"
-      end
-    end
+    return DateLabelHelper::DueDateView.new(due, prefs).due_date_mobile_html
   end
-  
+
   # Returns a count of next actions in the given context or project. The result
   # is count and a string descriptor, correctly pluralised if there are no
   # actions or multiple actions
@@ -98,11 +57,11 @@ module ApplicationHelper
     s += ", #{t('common.note', :count => project.note_count)}" unless project.note_count == 0
     s.html_safe
   end
-  
+
   def link_to_context(context, descriptor = sanitize(context.name))
     link_to( descriptor, context, :title => "View context: #{context.name}" )
   end
-  
+
   def link_to_project(project, descriptor = sanitize(project.name))
     link_to( descriptor, project, :title => "View project: #{project.name}" )
   end
@@ -111,19 +70,19 @@ module ApplicationHelper
     link_to(descriptor, edit_note_path(note),
       {:id => "link_edit_#{dom_id(note)}", :class => "note_edit_settings"})
   end
-  
+
   def link_to_project_mobile(project, accesskey, descriptor = sanitize(project.name))
     link_to( descriptor, project_path(project, :format => 'm'), {:title => "View project: #{project.name}", :accesskey => accesskey} )
   end
-  
+
   def item_link_to_context(item)
     link_to_context( item.context, prefs.verbose_action_descriptors ? "[#{item.context.name}]" : "[C]" )
   end
-  
+
   def item_link_to_project(item)
     link_to_project( item.project, prefs.verbose_action_descriptors ? "[#{item.project.name}]" : "[P]" )
   end
-  
+
   def render_flash
     render :partial => 'shared/flash', :object => flash
   end
@@ -131,7 +90,7 @@ module ApplicationHelper
   def time_span_text(date, i18n_text)
     return (date ? "#{i18n_text} #{format_date(date)}" : "").html_safe
   end
-  
+
   def recurrence_time_span(rt)
     case rt.ends_on
     when "no_end_date"
@@ -177,11 +136,11 @@ module ApplicationHelper
   def link_to_sidebar_item(item)
     item.is_a?(Project) ? link_to_project( item ) : link_to_context( item )
   end
-  
+
   def sidebar_html_for_item(item)
     content_tag(:li, link_to_sidebar_item(item) + " (" + count_undone_todos_phrase(item)+")")
   end
-  
+
   def sidebar_html_for_list(list)
     return content_tag(:li, t('sidebar.list_empty')).html_safe if list.empty?
     return list.inject("") { |html, item| html << sidebar_html_for_item(item) }.html_safe
@@ -215,41 +174,32 @@ module ApplicationHelper
       javascript_include_tag("i18n/jquery.ui.datepicker-#{locale}.js")
     end
   end
-  
+
+  def done_path(controller_name, type)
+    case controller_name
+    when "contexts"
+      send("#{type}_todos_context_path",@context)
+    when "projects"
+      send("#{type}_todos_project_path", @project)
+    when "todos"
+      if @tag_name
+        send("#{type}_tag_path",@tag_name)
+      else
+        send("#{type}_todos_path")
+      end
+    else
+      send("#{type}_todos_path")
+    end
+  end
+
   def determine_done_path
-    case controller.controller_name
-    when "contexts"
-      done_todos_context_path(@context)
-    when "projects"
-      done_todos_project_path(@project)
-    when "todos"
-      if source_view_is(:tag)
-        done_tag_path(@tag_name)
-      else
-        done_todos_path
-      end
-    else
-      done_todos_path
-    end
+    done_path(controller.controller_name, :done)
   end
-  
+
   def determine_all_done_path
-    case controller.controller_name
-    when "contexts"
-      all_done_todos_context_path(@context)
-    when "projects"
-      all_done_todos_project_path(@project)
-    when "todos"
-      if source_view_is(:tag)
-        all_done_tag_path(@tag_name)
-      else
-        all_done_todos_path
-      end
-    else
-      all_done_todos_path
-    end
+    done_path(controller.controller_name, :all_done)
   end
-  
+
   def get_list_of_error_messages_for(model)
     if model.errors.any?
       content_tag(:div, {:id=>"errorExplanation"}) do
@@ -259,5 +209,49 @@ module ApplicationHelper
       end
     end
   end
-  
+
+  def link_to_delete(type, object, descriptor = sanitize(object.name))
+    link_to(
+      descriptor,
+      self.send("#{type}_path", object, :format => 'js'),
+      {
+        :id => "delete_#{type}_#{object.id}",
+        :class => "delete_#{type}_button icon",
+        :x_confirm_message => t("#{type}s.delete_#{type}_confirmation", :name => object.name),
+        :title => t("#{type}s.delete_#{type}_title")
+      }
+    )
+  end
+
+  def link_to_edit(type, object, descriptor)
+    link_to(descriptor, self.send("edit_#{type}_path", object),
+      {
+        :id => "link_edit_#{dom_id(object)}",
+        :class => "#{type}_edit_settings icon"
+      })
+  end
+
+  def source_view_key
+    # uses @project.id or @context.id depending on source_view
+    source_view_is_one_of(:project, :context) ? "#{@source_view}-#{eval("@#{@source_view}.id")}" : @source_view
+  end
+
+  # create a unique object name which can be used in ajax calls returning js
+  # to prevent concurrent calls with same functions to overwrite each other functions
+  def unique_object_name_for(name)
+    "#{name}_#{SecureRandom.hex(5)}"
+  end
+
+  def js_render(partial, locals = {}, object=nil)
+    if object
+      escape_javascript(render(partial: partial, locals: locals, object: object))
+    else
+      escape_javascript(render(partial: partial, locals: locals))
+    end
+  end
+
+  def js_error_messages_for(object)
+    escape_javascript(get_list_of_error_messages_for(object))
+  end
+
 end

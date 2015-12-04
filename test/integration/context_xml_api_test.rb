@@ -1,6 +1,6 @@
-require File.expand_path(File.dirname(__FILE__) + '/../test_helper')
+require 'test_helper'
 
-class ContextXmlApiTest < ActionController::IntegrationTest
+class ContextXmlApiTest < ActionDispatch::IntegrationTest
 
   @@context_name = "@newcontext"
   @@valid_postdata = "<context><name>#{@@context_name}</name></context>"
@@ -19,7 +19,7 @@ class ContextXmlApiTest < ActionController::IntegrationTest
   end
   
   def test_fails_gracefully_with_invalid_xml_format
-    authenticated_post_xml_to_context_create "<context_name></context_name>"
+    authenticated_post_xml_to_context_create "<context><name></name></context>"
     assert_responses_with_error 'Name context must have a name'
   end
     
@@ -39,7 +39,7 @@ class ContextXmlApiTest < ActionController::IntegrationTest
       authenticated_post_xml_to_context_create
       assert_response 201
     end
-    context1 = Context.find_by_name(@@context_name)
+    context1 = Context.where(:name => @@context_name).first
     assert_not_nil context1, "expected context '#{@@context_name}' to be created"
   end
   

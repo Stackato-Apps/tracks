@@ -1,7 +1,7 @@
 var TracksForm = {
     toggle: function(toggleLinkId, formContainerId, formId, hideLinkText,
         hideLinkTitle, showLinkText, showLinkTitle) {
-        var form=$('#'+formContainerId)
+        var form=$('#'+formContainerId);
         form.toggle();
         var toggleLink = $('#'+toggleLinkId);
         if (!form.is(':visible')) {
@@ -81,18 +81,22 @@ var TracksForm = {
 
         /* submit todo form after entering new todo */
         $(document).on("click", "button#todo_new_action_submit", function (ev) {
-            if ($('input#predecessor_input').val() != "")
-              if (!confirm(i18n['todos.unresolved_dependency']))
+            if ($('input#predecessor_input').val() !== "") {
+              if (!confirm(i18n['todos.unresolved_dependency'])) {
                 return false;
-            if (TodoItems.askIfNewContextProvided('', this))
+              }
+            }
+            if (TodoItems.askIfNewContextProvided('', this)) {
                 submit_with_ajax_and_block_element('form#todo-form-new-action', $(this));
+            }
             return false;
         });
 
         /* submit multi-todo form after entering multiple new todos */
         $(document).on("click", "button#todo_multi_new_action_submit", function (ev) {
-            if (TodoItems.askIfNewContextProvided('multi_', this))
-                submit_with_ajax_and_block_element('form#todo-form-multi-new-action', $(this));
+            if (TodoItems.askIfNewContextProvided('multi_', this)) {
+              submit_with_ajax_and_block_element('form#todo-form-multi-new-action', $(this));
+            }
             return false;
         });
     },
@@ -109,7 +113,7 @@ var TracksForm = {
             var new_list = new Array();
             while (id_list.length > 0) {
                 var elem = id_list.pop();
-                if (elem != this.id && elem != '' && elem != ' ') {
+                if (elem !== this.id && elem !== '' && elem !== ' ') {
                     new_list.push ( elem );
                 }
             }
@@ -117,13 +121,13 @@ var TracksForm = {
             // update id list
             predecessor_list.val( new_list.join(", ") );
 
-            if (new_list.length == 0) {
+            if (new_list.length === 0) {
                 $(form).find("label#label_for_predecessor_input").hide();
                 $(form).find("ul#predecessor_ul").hide();
             }
 
             return false; // prevent submit/follow link
-        })
+        });
     },
     generate_dependency_list: function(todo_id) {
         if (spec_of_todo.length > 0) {
@@ -146,183 +150,7 @@ var TracksForm = {
             }
         }
     }
-}
-
-var TracksPages = {
-    show_errors: function (html) {
-        $('div#error_status').html(html);
-        $('div#error_status').show();
-    },
-    show_edit_errors: function(html) {
-        $('div#edit_error_status').html(html);
-        $('div#edit_error_status').show();
-    },
-    show_errors_for_multi_add: function(html) {
-        $('div#multiple_error_status').html(html);
-        $('div#multiple_error_status').show();
-    },
-    hide_errors: function() {
-        $('div#error_status').hide();
-        $('div#edit_error_status').hide();
-        $('div#multiple_error_status').hide();
-    },
-    update_sidebar: function(html) {
-        $('#sidebar').html(html);
-    },
-    setup_nifty_corners: function() {
-        Nifty("div#recurring_new_container","normal");
-        Nifty("div#context_new_container","normal");
-        Nifty("div#feedlegend","normal");
-        Nifty("div#feedicons-project","normal");
-        Nifty("div#feedicons-context","normal");
-        Nifty("div#todo_new_action_container","normal");
-        Nifty("div#project_new_project_container","normal");
-    },
-    page_notify: function(type, message, fade_duration_in_sec) {
-        var flash = $('div#message_holder');
-        flash.html("<h4 id=\'flash\' class=\'alert "+type+"\'>"+message+"</h4>");
-        flash = $('h4#flash');
-
-        fadein_duration = 1500;
-        fadeout_duration = 1500;
-        show_duration = fade_duration_in_sec*1000 - fadein_duration - fadeout_duration
-        if (show_duration < 0)
-          show_duration = 1000;
-        flash.fadeIn(fadein_duration).delay(show_duration).fadeOut(fadeout_duration);
-    },
-    set_page_badge: function(count) {
-        $('#badge_count').html(count);
-    },
-    setup_autocomplete_for_tag_list: function(id) {
-        $(id+':not(.ac_input)')
-        .bind( "keydown", function( event ) { // don't navigate away from the field on tab when selecting an item
-            if ( event.keyCode === $.ui.keyCode.TAB &&
-                $( this ).data( "autocomplete" ).menu.active ) {
-                event.preventDefault();
-            }
-        })
-        .autocomplete({
-            minLength: 2,
-            autoFocus: true,
-            delay: 400, /* increase a bit over dthe default of 300 */
-            source: function( request, response ) {
-                var last_term = extractLast( request.term );
-                if (last_term != "" && last_term != " ")
-                    $.ajax( {
-                        url: relative_to_root('tags.autocomplete'),
-                        dataType: 'json',
-                        data: {
-                            term: last_term
-                        },
-                        success: function(data, textStatus, jqXHR) {
-                            // remove spinner as removing the class is not always done by response
-                            $(id).removeClass('ui-autocomplete-loading');
-                            response(data, textStatus, jqXHR); // call jquery callback to handle data
-                        }
-                    })
-                else {
-                    // remove spinner as typing will always add the spinner
-                    $(id).removeClass('ui-autocomplete-loading');
-                }
-            },
-            focus: function() {
-                // prevent value inserted on focus
-                return false;
-            },
-            select: function( event, ui ) {
-                var terms = split( this.value );
-                // remove the current input
-                terms.pop();
-                // add the selected item
-                terms.push( ui.item.value );
-                // add placeholder to get the comma-and-space at the end
-                //terms.push( "" );
-                this.value = terms.join( ", " );
-                return false;
-            }
-        });
-    },
-    setup_all_autocompleters: function() {
-        //fix for #1036 where closing a edit form before the autocomplete was filled
-        //resulted in a dropdown box that could not be removed. We remove all
-        //autocomplete boxes the hard way
-        $('.ac_results').remove();
-
-        // initialize autocompleters
-        ProjectItems.setup_autocomplete_for_projects('input[name=project_name]');
-        ContextItems.setup_autocomplete_for_contexts('input[name=context_name]');
-        ContextItems.setup_autocomplete_for_contexts('input[id="project_default_context_name"]');
-        TracksPages.setup_autocomplete_for_tag_list('input[name=tag_list]'); // todo edit form
-        TracksPages.setup_autocomplete_for_tag_list('input[name=edit_recurring_todo_tag_list]');
-        TracksPages.setup_autocomplete_for_tag_list('input[id="project_default_tags"]');
-        TodoItems.setup_autocomplete_for_predecessor();
-    },
-    setup_datepicker: function() {
-        $('input.Date').datepicker({
-            'dateFormat': dateFormat,
-            'firstDay': weekStart,
-            'showButtonPanel': true,
-            'showWeek': true,
-            'changeMonth': true,
-            'changeYear': true,
-            'maxDate': '+5y',
-            'minDate': '-1y',
-            'showAnim': '' /* leave empty, see #1117 */
-        });
-    },
-    setup_behavior: function () {
-        /* main menu */
-        $('ul.sf-menu').superfish({
-            delay: 250,
-            animation:   {
-                opacity:'show',
-                height:'show'
-            },
-            autoArrows: false,
-            dropShadows: false,
-            speed: 'fast'
-        });
-
-        /* context menu */
-        $('ul.sf-item-menu').superfish({
-            delay: 100,
-            animation:   {
-                opacity:'show',
-                height:'show'
-            },
-            autoArrows: false,
-            dropShadows: false,
-            speed: 'fast',
-            onBeforeShow: function() { /* highlight todo */
-                $(this.parent().parent().parent()).addClass("sf-item-selected");
-            },
-            onHide: function() { /* remove hightlight from todo */
-                $(this.parent().parent().parent()).removeClass("sf-item-selected");
-            }
-        });
-
-        /* for toggle notes link in mininav */
-        $("#toggle-notes-nav").click(function () {
-            $(".todo_notes").toggle();
-        });
-
-
-       /* Poor man's perspectives, allows to hide any context that is collapsed */
-        $("#toggle-contexts-nav").click(function () {
-            /* Need to keep a single toggle across all contexts */
-            $(this).toggleClass("context_visibility");
-            if ($(this).hasClass("context_visibility")) {
-                $(".context_collapsed").hide(); /* Hide all collapsed contexts together*/
-            }
-            else {
-                $(".context_collapsed").show();
-            }
-        });
-
-        /* fade flashes and alerts in automatically */
-        $(".alert").fadeOut(8000);
-    }
-}
+};
 
 var TodoItemsContainer = {
     // public
@@ -355,8 +183,8 @@ var TodoItemsContainer = {
             return false;
         });
         // set to cookied state
-        $('.container.context').each(function(){
-            if($.cookie(TodoItemsContainer.buildCookieName(this))=="true"){
+        $('.container.collapsible').each(function(){
+            if($.cookie(TodoItemsContainer.buildCookieName(this)) === "true"){
                 $(this).find('.toggle_target').hide();
                 $(this).find('.toggle_target').parent().addClass("context_collapsed");
             }
@@ -368,7 +196,7 @@ var TodoItemsContainer = {
         var tracks_login = $.cookie('tracks_login');
         return 'tracks_'+tracks_login+'_context_' + containerElem.id + '_collapsed';
     }
-}
+};
 
 var TodoItems = {
     getContextsForAutocomplete: function (term, element_to_block) {
@@ -379,19 +207,25 @@ var TodoItems = {
         params.async = false;
         params.success = function(result){
             allContexts = result;
-        }
+        };
         $.ajax(params);
         return allContexts;
     },
     askIfNewContextProvided: function(source, element_to_block) {
         var givenContextName = $('#'+source+'todo_context_name').val();
-        if (givenContextName.length == 0) return true; // do nothing and depend on rails validation error
+        if (givenContextName.length === 0) {
+          return true; // do nothing and depend on rails validation error
+        }
 
         var contexts = TodoItems.getContextsForAutocomplete(givenContextName, element_to_block);
 
         if (contexts) {
-            for (var i=0; i<contexts.length; i++)
-                if (contexts[i].value == givenContextName) return true;
+          for (var i=0; i<contexts.length; i++) {
+            // do case insensitive check, so Home == home
+            if (contexts[i].value.toLowerCase() === givenContextName.toLowerCase()) {
+              return true;
+            }
+          }
         }
         return confirm(i18n['contexts.new_context_pre'] + givenContextName + i18n['contexts.new_context_post']);
     },
@@ -418,10 +252,11 @@ var TodoItems = {
             delay: 400, /* delay a bit more than the default of 300 */
             source: function( request, response ) {
                 var term = request.term;
-                if (term != "" && term != " ")
-                    $.getJSON( relative_to_root('auto_complete_for_predecessor'), {
-                        term: term
-                    }, response );
+                if (term !== "" && term !== " ") {
+                  $.getJSON( relative_to_root('auto_complete_for_predecessor'), {
+                      term: term
+                  }, response );
+                }
             },
             focus: function() {
                 // prevent value inserted on focus
@@ -429,10 +264,10 @@ var TodoItems = {
             },
             select: function( event, ui ) {
                 // retrieve values from input fields
-                var todo_spec = ui.item.label
-                var todo_id = ui.item.value
+                var todo_spec = ui.item.label;
+                var todo_id = ui.item.value;
                 var form = $(this).parents('form').get(0);
-                var predecessor_list = $(form).find('input[name=predecessor_list]')
+                var predecessor_list = $(form).find('input[name=predecessor_list]');
                 var id_list = split( predecessor_list.val() );
 
                 // add the dependency to id list
@@ -442,7 +277,7 @@ var TodoItems = {
                 // show the html for the list of deps
                 $(form).find('ul#predecessor_ul').show();
                 $(form).find("label#label_for_predecessor_input").show();
-                if (todo_spec.length > 35 && form.id == "todo-form-new-action") {
+                if (todo_spec.length > 35 && form.id === "todo-form-new-action") {
                     // cut off string only in new-todo-form
                     todo_spec = todo_spec.substring(0,40)+"...";
                 }
@@ -466,11 +301,11 @@ var TodoItems = {
         /* Drag & Drop for successor/predecessor */
         var dragged_todo = ui.draggable[0].id.split('_')[2];
         var dropped_todo = this.id.split('_')[2];
-        ui.draggable.remove();
         $('.drop_target').hide(); // IE8 doesn't call stop() in this situation
 
         ajax_options = default_ajax_options_for_scripts('POST', relative_to_root('todos/add_predecessor'), $(this));
-        ajax_options.data += "&predecessor="+dropped_todo + "&successor="+dragged_todo
+        ajax_options.data["predecessor"]=dropped_todo;
+        ajax_options.data["successor"]=dragged_todo;
         $.ajax(ajax_options);
     },
     drop_todo_on_context: function(evt, ui) {
@@ -482,13 +317,13 @@ var TodoItems = {
         $('.drop_target').hide();
 
         ajax_options = default_ajax_options_for_scripts('POST', relative_to_root('todos/'+dragged_todo + '/change_context'), target);
-        ajax_options.data += "&todo[context_id]="+context_id
+        ajax_options.data["todo[context_id]"]=context_id;
         $.ajax(ajax_options);
     },
     setup_drag_and_drop: function() {
         $('.item-show').draggable({
             handle: '.grip',
-            revert: 'invalid',
+            revert: true,
             start: TodoItems.drag_todo,
             stop: function() {
                 $('.drop_target').hide();
@@ -542,7 +377,7 @@ var TodoItems = {
 
         /* delete button to delete a todo from the list */
         $(document).on("click",".item-container a.icon_delete_item", function(evt){
-            var confirm_message = $(this).attr("x_confirm_message")
+            var confirm_message = $(this).attr("x_confirm_message");
             if(confirm(confirm_message)){
                 delete_with_ajax_and_block_element(this.href, $(this).parents('.item-container'));
             }
@@ -560,15 +395,16 @@ var TodoItems = {
             $(this).parents('.edit-form').fadeOut(200, function () {
                 $(this).parents('.list').find('.project').fadeIn(500);
                 $(this).parents('.container').find('.item-show').fadeIn(500);
-            })
+            });
         });
 
         // defer a todo
         $(document).on("click",".item-container a.icon_defer_item", function(ev){
-            if ($(this).attr("x_defer_alert") == "true")
+            if ($(this).attr("x_defer_alert") === "true") {
                 alert ($(this).attr("x_defer_date_after_due_date"));
-            else
+            } else {
                 put_with_ajax_and_block_element(this.href, $(this).parents(".item-container"));
+            }
             return false;
         });
 
@@ -576,14 +412,14 @@ var TodoItems = {
         $(document).on("click",'.item-container a.delete_dependency_button', function(evt){
             var predecessor_id=$(this).attr("x_predecessors_id");
             var ajax_options = default_ajax_options_for_scripts('DELETE', this.href, $(this).parents('.item-container'));
-            ajax_options.data += "&predecessor="+predecessor_id
+            ajax_options.data["predecessor"] = predecessor_id;
             $.ajax(ajax_options);
             return false;
         });
 
         TracksForm.enable_dependency_delete();
     }
-}
+};
 
 var ContextItems = {
     setup_autocomplete_for_contexts: function(id) {
@@ -594,7 +430,7 @@ var ContextItems = {
             delay: 400 /* increase a bit. default was 300 */
         });
     }
-}
+};
 
 var ProjectItems = {
     setup_autocomplete_for_projects: function(id) {
@@ -605,13 +441,13 @@ var ProjectItems = {
             delay: 400 /* increase a bit. default was 300 */
         });
     }
-}
+};
 
 var UsersPage = {
     setup_behavior: function() {
         /* delete button to delete a user from the list */
         $(document).on("click",'a.delete_user_button', function(evt){
-            var confirm_message = $(this).attr("x_confirm_message")
+            var confirm_message = $(this).attr("x_confirm_message");
             if(confirm(confirm_message)){
                 delete_with_ajax_and_block_element(this.href, $(this).parents('.project'));
             }
@@ -619,7 +455,7 @@ var UsersPage = {
         });
 
     }
-}
+};
 
 var PreferencesPage = {
     get_date_format: function(tag_name) {
@@ -641,8 +477,8 @@ var PreferencesPage = {
 
       $('input[name="user[auth_type]"]').change(function() {
         var value = $('input[name="user[auth_type]"]:checked').val();
-        $('#open_id')[0].style.display = value == 'open_id' ? 'block' : 'none'
-        $('#database')[0].style.display = value == 'database' ? 'block' : 'none'
+        $('#open_id')[0].style.display = value ==='open_id' ? 'block' : 'none';
+        $('#database')[0].style.display = value === 'database' ? 'block' : 'none';
       });
 
       $('input[name="date_picker1"]').change(function() {
@@ -660,7 +496,7 @@ var PreferencesPage = {
       PreferencesPage.setup_getter_for_date_format('date_format');
       PreferencesPage.setup_getter_for_date_format('title_date_format');
     }
-}
+};
 
 var ProjectListPage = {
     update_state_count: function(state, count) {
@@ -697,7 +533,7 @@ var ProjectListPage = {
     },
     setup_behavior: function() {
         /* in-place edit of project name */
-        $('div#project_name').editable(ProjectListPage.save_project_name, {
+        $('span#project_name').editable(ProjectListPage.save_project_name, {
             style: 'padding: 0px; width=100%;',
             submit: i18n['common.ok'],
             cancel: i18n['common.cancel'],
@@ -706,7 +542,7 @@ var ProjectListPage = {
 
         /* alphabetize project list */
         $(document).on("click",'.alphabetize_link', function(evt) {
-            var confirm_message = $(this).attr("x_confirm_message")
+            var confirm_message = $(this).attr("x_confirm_message");
             if(confirm(confirm_message)){
                 post_with_ajax_and_block_element(this.href, $(this).parents('.alpha_sort'));
             }
@@ -715,7 +551,7 @@ var ProjectListPage = {
 
         /* sort by number of actions */
         $('.actionize_link').click(function(evt){
-            var confirm_message = $(this).attr("x_confirm_message")
+            var confirm_message = $(this).attr("x_confirm_message");
             if(confirm(confirm_message)){
                 post_with_ajax_and_block_element(this.href, $(this).parents('.tasks_sort'));
             }
@@ -724,7 +560,7 @@ var ProjectListPage = {
 
         /* delete button to delete a project from the list */
         $(document).on("click",'a.delete_project_button', function(evt){
-            var confirm_message = $(this).attr("x_confirm_message")
+            var confirm_message = $(this).attr("x_confirm_message");
             if(confirm(confirm_message)){
                 delete_with_ajax_and_block_element(this.href, $(this).parents('.project'));
             }
@@ -752,7 +588,7 @@ var ProjectListPage = {
                 $(this).parents('.project-edit-current').removeClass('project-edit-current');
                 $(this).parents('.list').find('.project').fadeIn(500);
                 $(this).parents('.container').find('.item-show').fadeIn(500);
-            })
+            });
         });
 
         /* submit project form after entering new project */
@@ -778,21 +614,34 @@ var ProjectListPage = {
 
         $('#project_new #project_name').focus();
     }
-}
+};
 
 var ContextListPage = {
     update_state_count: function(state, count) {
         $('#'+state+'-contexts-count').html(count);
+        ContextListPage.set_empty_message(state, count===0);
     },
-    update_all_states_count: function (active_count, hidden_count, completed_count) {
-        $(["active", "hidden"]).each(function() {
+    update_all_states_count: function (active_count, hidden_count, closed_count) {
+        $(["active", "hidden", "closed"]).each(function() {
             ContextListPage.update_state_count(this, eval(this+'_count'));
         });
     },
-    show_or_hide_all_state_containers: function (show_active, show_hidden, show_completed) {
-        $(["active", "hidden"]).each(function() {
+    show_or_hide_all_state_containers: function (show_active, show_hidden, show_closed) {
+        $(["active", "hidden", "closed"]).each(function() {
             ContextListPage.set_state_container_visibility(this, eval('show_'+this));
+            ContextListPage.hide_empty_message(this, !eval('show_'+this));
         });
+    },
+    hide_empty_message: function(state, set_visible) {
+        // TODO: wrong method name. refactor to remove this method
+        set_empty_message(state, set_visible);
+    },
+    set_empty_message: function(state, set_visible) {
+        if(set_visible) {
+            $('div#'+state+'-contexts-empty-nd').slideDown("fast");
+        } else {
+            $('div#'+state+'-contexts-empty-nd').slideUp("fast");
+        }
     },
     set_state_container_visibility: function (state, set_visible) {
         if (set_visible) {
@@ -822,7 +671,7 @@ var ContextListPage = {
 
         /* delete a context using the x button */
         $(document).on("click",'a.delete_context_button', function(evt){
-            var confirm_message = $(this).attr("x_confirm_message")
+            var confirm_message = $(this).attr("x_confirm_message");
             if(confirm(confirm_message)){
                 delete_with_ajax_and_block_element(this.href, $(this).parents('.context'));
             }
@@ -847,6 +696,15 @@ var ContextListPage = {
             return false;
         });
 
+        /* cancel edit context form */
+        $(document).on("click",'form.edit-context-form a.negative', function(){
+            $(this).parents('.edit-form').fadeOut(200, function () {
+                $(this).parents('.context-edit-current').removeClass('context-edit-current');
+                $(this).parents('.list').find('.context').fadeIn(500);
+                $(this).parents('.container').find('.item-show').fadeIn(500);
+            });
+        });
+
         /* Contexts behavior */
         $('#toggle_context_new').click(function(evt){
             TracksForm.toggle('toggle_context_new', 'context_new', 'context-form',
@@ -855,33 +713,16 @@ var ContextListPage = {
         });
 
         /* make the two state lists of context sortable */
-        $(['active', 'hidden']).each(function() {
+        $(['active', 'hidden', 'closed']).each(function() {
             $("#list-contexts-"+this).sortable({
                 handle: '.grip',
                 update: update_order
-            })
+            });
         });
 
         $('#context-form #context_name').focus();
     }
-}
-
-var IntegrationsPage = {
-    setup_behavior: function() {
-        $(document).on("change",'#applescript1-contexts', function(){
-            IntegrationsPage.get_script_for_context("#applescript1", "get_applescript1", this.value);
-        });
-        $(document).on("change",'#applescript2-contexts', function(){
-            IntegrationsPage.get_script_for_context("#applescript2", "get_applescript2", this.value);
-        });
-        $(document).on("change",'#quicksilver-contexts', function(){
-            IntegrationsPage.get_script_for_context("#quicksilver", "get_quicksilver_applescript", this.value)
-        });
-    },
-    get_script_for_context: function(element, getter, context){
-        generic_get_script_for_list(element, "integrations/"+getter, "context_id="+context);
-    }
-}
+};
 
 var FeedsPage = {
     setup_behavior: function() {
@@ -899,7 +740,7 @@ var FeedsPage = {
     get_script_for_project: function(element, getter, project){
         generic_get_script_for_list(element, "feedlist/"+getter, "project_id="+project);
     }
-}
+};
 
 var NotesPage = {
     setup_behavior: function() {
@@ -912,7 +753,7 @@ var NotesPage = {
 
         /* delete button for note */
         $(document).on("click",'a.delete_note_button', function(){
-            var confirm_message = $(this).attr("x_confirm_message")
+            var confirm_message = $(this).attr("x_confirm_message");
             if(confirm(confirm_message)){
                 delete_with_ajax_and_block_element(this.href, $(this).parents('.project_notes'));
             }
@@ -932,7 +773,7 @@ var NotesPage = {
         $(document).on("click",'.edit-note-form a.negative', function(){
             var dom_id = this.id.substr(14);
             /* dom_id == 'note_XX' on notes page and just 'note' on project page */
-            if (dom_id == 'note') {
+            if (dom_id === 'note') {
                 $('#new-note').hide();
             } else {
                 $('#'+dom_id).toggle();
@@ -947,7 +788,7 @@ var NotesPage = {
             return false;
         });
     }
-}
+};
 
 var RecurringTodosPage = {
     hide_all_recurring: function () {
@@ -965,7 +806,7 @@ var RecurringTodosPage = {
     },
     toggle_overlay: function () {
         var overlay_element = document.getElementById("overlay");
-        overlay_element.style.visibility = (overlay_element.style.visibility == "visible") ? "hidden" : "visible";
+        overlay_element.style.visibility = (overlay_element.style.visibility === "visible") ? "hidden" : "visible";
     },
     setup_behavior: function() {
       /* add new recurring todo plus-button in sidebar */
@@ -975,10 +816,10 @@ var RecurringTodosPage = {
 
       /* setup dialog for new repeating action */
       $( "#new-recurring-todo" ).dialog({
-    		autoOpen: false,
+        autoOpen: false,
         height: 690,
-  			width: 750,
-  			modal: true,
+        width: 750,
+        modal: true,
         buttons: {
           create: {
             text: i18n['common.create'],
@@ -1007,10 +848,10 @@ var RecurringTodosPage = {
 
       /* setup dialog for new repeating action */
       $( "#edit-recurring-todo" ).dialog({
-    		autoOpen: false,
+        autoOpen: false,
         height: 690,
-  			width: 750,
-  			modal: true,
+        width: 750,
+        modal: true,
         buttons: {
           "Update": {
             text: i18n['common.update'],
@@ -1046,7 +887,7 @@ var RecurringTodosPage = {
 
       /* delete button to delete a todo from the list */
       $(document).on("click",'.item-container a.delete_icon', function(evt){
-          var confirm_message = $(this).attr("x_confirm_message")
+          var confirm_message = $(this).attr("x_confirm_message");
           if(confirm(confirm_message)){
               delete_with_ajax_and_block_element(this.href, $(this).parents('.project'));
             }
@@ -1054,13 +895,13 @@ var RecurringTodosPage = {
       });
 
     }
-}
+};
 
 var SearchPage = {
     setup_behavior: function() {
         $('#search-form #search').focus();
     }
-}
+};
 
 /**************************************/
 /* generic Tracks functions           */
@@ -1099,14 +940,16 @@ function extractLast( term ) {
 $.fn.clearForm = function() {
     return this.each(function() {
         var type = this.type, tag = this.tagName.toLowerCase();
-        if (tag == 'form')
-            return $(':input',this).clearForm();
-        if (type == 'text' || type == 'password' || tag == 'textarea')
-            this.value = '';
-        else if (type == 'checkbox' || type == 'radio')
-            this.checked = false;
-        else if (tag == 'select')
-            this.selectedIndex = -1;
+        if (tag === 'form') {
+          return $(':input',this).clearForm();
+        }
+        if (type === 'text' || type === 'password' || tag === 'textarea') {
+          this.value = '';
+        } else if (type === 'checkbox' || type === 'radio') {
+          this.checked = false;
+        } else if (tag === 'select') {
+          this.selectedIndex = -1;
+        }
     });
 };
 
@@ -1115,7 +958,7 @@ $.fn.clearDeps = function() {
     $("label#label_for_predecessor_input").hide();
     $('ul#predecessor_ul', this).html("");
     $('input[name=predecessor_list]').val("");
-}
+};
 
 /**************************************/
 /* Tracks AJAX functions              */
@@ -1128,11 +971,12 @@ function generic_get_script_for_list(element, getter, param){
 function default_ajax_options_for_submit(ajax_type, element_to_block) {
     // the complete is not a function but an array so you can push other
     // functions that will be executed after the ajax call completes
+
     var options = {
         type: ajax_type,
         async: true,
         block_element: element_to_block,
-        data: "_source_view=" + SOURCE_VIEW,
+        data: {_source_view: SOURCE_VIEW, _group_view_by: GROUP_VIEW_BY},
         beforeSend: function() {
             if (this.block_element) {
                 $(this.block_element).block({
@@ -1152,9 +996,10 @@ function default_ajax_options_for_submit(ajax_type, element_to_block) {
         error: function(req, status) {
             TracksPages.page_notify('error', i18n['common.ajaxError']+': '+status, 8);
         }
+    };
+    if(typeof(TAG_NAME) !== 'undefined') {
+        options.data["_tag_name"] = TAG_NAME;
     }
-    if(typeof(TAG_NAME) !== 'undefined')
-        options.data += "&_tag_name="+ TAG_NAME;
     return options;
 }
 
@@ -1181,7 +1026,7 @@ function post_with_ajax_and_block_element(the_url, element_to_block) {
 
 function put_with_ajax_and_block_element(the_url, element_to_block) {
     var options = default_ajax_options_for_scripts('POST', the_url, element_to_block);
-    options.data += '&_method=put';
+    options.data["_method"] = "put";
     $.ajax(options);
 }
 
@@ -1191,14 +1036,12 @@ function delete_with_ajax_and_block_element(the_url, element_to_block) {
 
 $(document).ajaxSend(function(event, request, settings) {
     /* Set up authenticity token properly */
-    if ( settings.type == 'POST' || settings.type == 'post' ) {
-        if(typeof(AUTH_TOKEN) != 'undefined'){
-            settings.data = (settings.data ? settings.data + "&" : "")
-            + "authenticity_token=" + encodeURIComponent( AUTH_TOKEN ) + "&"
-            + "_source_view=" + encodeURIComponent( SOURCE_VIEW );
+    if ( settings.type === 'POST' || settings.type === 'post' ) {
+        if(typeof(AUTH_TOKEN) !== 'undefined'){
+            settings.data["authenticity_token"] = AUTH_TOKEN;
+            settings.data["_source_view"] = SOURCE_VIEW;
         } else {
-            settings.data = (settings.data ? settings.data + "&" : "")
-            + "_source_view=" + encodeURIComponent( SOURCE_VIEW );
+            settings.data["_source_view"] = SOURCE_VIEW;
         }
         request.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
     }
@@ -1210,8 +1053,8 @@ function setup_periodic_check(url_for_check, interval_in_sec, method) {
     setInterval(
         function(){
             var settings = default_ajax_options_for_scripts( method ? method : "GET", url_for_check, null);
-            if(typeof(AUTH_TOKEN) != 'undefined'){
-                settings.data += "&authenticity_token=" + encodeURIComponent( AUTH_TOKEN )
+            if(typeof(AUTH_TOKEN) !== 'undefined'){
+                settings.data["authenticity_token"] = AUTH_TOKEN;
             }
             $.ajax(settings);
         },
@@ -1224,20 +1067,29 @@ function update_order(event, ui){
     var row = $(ui.item).children('.sortable_row');
 
     var url = '';
-    if(row.hasClass('context'))
+    if(row.hasClass('context')) {
         url = relative_to_root('contexts/order');
-    else if(row.hasClass('project'))
+    } else if(row.hasClass('project')) {
         url = relative_to_root('projects/order');
-    else {
+    } else {
         console.log("Bad sortable list");
         return;
     }
     $.post(url,
         container.sortable("serialize"),
         function(){
-            row.effect('highlight', {}, 1000)
+            row.effect('highlight', {}, 1000);
         },
         'script');
+}
+
+function set_defaults(defaults, field, input_name) {
+  if(defaults[field.val()] !== undefined) {
+    var input = field.parents(".edit_todo_form").find('input[name='+input_name+']');
+    if(input.attr('edited') === undefined) {
+      input.val(defaults[field.val()]);
+    }
+  }
 }
 
 function project_defaults(){
@@ -1245,19 +1097,9 @@ function project_defaults(){
     // don't change the context
     // see ticket #934
     } else {
-        if(defaultContexts[$(this).val()] !== undefined) {
-            var context_name = $(this).parents('form').find('input[name=context_name]');
-            if(context_name.attr('edited') === undefined){
-                context_name.val(defaultContexts[$(this).val()]);
-            }
-        }
+      set_defaults(defaultContexts, $(this), 'context_name');
     }
-    if(defaultTags[$(this).val()] !== undefined) {
-        var tag_list = $(this).parents('form').find('input[name=tag_list]');
-        if(tag_list.attr('edited') === undefined){
-            tag_list.val(defaultTags[$(this).val()]);
-        }
-    }
+    set_defaults(defaultTags, $(this), 'tag_list')
 }
 
 function enable_rich_interaction(){
@@ -1268,13 +1110,13 @@ function enable_rich_interaction(){
     TodoItems.setup_drag_and_drop();
 
     /* have to bind on keypress because of limitations of live() */
-    $(document).on("keypress",'input[name=project_name]', function(){
+    $(document).on("keypress",'input[name=project_name]', function() {
         $(this).bind('blur', project_defaults);
     });
-    $(document).on("keypress",'input[name=context_name]', function(){
+    $(document).on("keypress",'input[name=context_name]', function() {
         $(this).attr('edited', 'true');
     });
-    $(document).on("keypress",'input[name=tag_list]', function(){
+    $(document).on("keypress",'input[name=tag_list]', function() {
         $(this).attr('edited', 'true');
     });
 
@@ -1306,7 +1148,7 @@ $(document).ready(function() {
     TodoItemsContainer.setup_container_toggles();
 
     /* enable page specific behavior */
-    $([ 'PreferencesPage', 'IntegrationsPage', 'NotesPage', 'ProjectListPage', 'ContextListPage',
+    $([ 'PreferencesPage', 'NotesPage', 'ProjectListPage', 'ContextListPage',
         'FeedsPage', 'RecurringTodosPage', 'TodoItems', 'TracksPages',
         'TracksForm', 'SearchPage', 'UsersPage' ]).each(function() {
         eval(this+'.setup_behavior();');
@@ -1315,3 +1157,4 @@ $(document).ready(function() {
     /* Gets called from all AJAX callbacks, too */
     enable_rich_interaction();
 });
+

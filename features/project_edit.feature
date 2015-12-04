@@ -19,8 +19,8 @@ Feature: Edit a project
   @javascript
   Scenario: I can describe the project using markup
     When I go to the "manage me" project
-    And I edit the project description to "_successfull outcome_: project is *done*"
-    Then I should see the italic text "successfull outcome" in the project description
+    And I edit the project description to "_successful outcome_: project is *done*"
+    Then I should see the italic text "successful outcome" in the project description
     And I should see the bold text "done" in the project description
 
   @javascript
@@ -123,7 +123,7 @@ Feature: Edit a project
   Scenario: Moving the todo to the tickler will move todo to tickler container and update empty messages
     Given I have a project "test" with 1 todos
     When I go to the "test" project
-    Then I should see "todo 1" in the action container
+    Then I should see "todo 1" in the context container for "Context A"
     And I should see empty message for deferred todos of project
     And I should see empty message for completed todos of project
     When I defer "todo 1" for 1 day

@@ -1,6 +1,6 @@
-require  File.expand_path(File.dirname(__FILE__) + '/../test_helper')
+require 'test_helper'
 
-class ProjectXmlApiTest < ActionController::IntegrationTest
+class ProjectXmlApiTest < ActionDispatch::IntegrationTest
   @@project_name = "My New Project"
   @@valid_postdata = "<project><name>#{@@project_name}</name></project>"
   
@@ -21,7 +21,7 @@ class ProjectXmlApiTest < ActionController::IntegrationTest
  end
     
   def test_fails_with_invalid_xml_format2
-    authenticated_post_xml_to_project_create "<request><project></project></request>"
+    authenticated_post_xml_to_project_create "<project><name></name></project>"
     assert_responses_with_error 'Name project must have a name'
   end
   
@@ -46,7 +46,7 @@ class ProjectXmlApiTest < ActionController::IntegrationTest
   def test_fails_with_comma_in_name
     authenticated_post_xml_to_project_create "<project><name>foo,bar</name></project>"
     assert_response :created
-    project1 = Project.find_by_name("foo,bar")
+    project1 = Project.where(:name => "foo,bar").first
     assert_not_nil project1, "expected project 'foo,bar' to be created"
   end
     
@@ -55,7 +55,7 @@ class ProjectXmlApiTest < ActionController::IntegrationTest
       authenticated_post_xml_to_project_create
       assert_response :created
     end
-    project1 = Project.find_by_name(@@project_name)
+    project1 = Project.where(:name => @@project_name).first
     assert_not_nil project1, "expected project '#{@@project_name}' to be created"
   end
       

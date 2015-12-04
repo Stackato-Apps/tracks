@@ -5,16 +5,18 @@
 // or vendor/assets/javascripts of plugins, if any, can be referenced here using a relative path.
 //
 // It's not advisable to add code directly here, but if you do, it'll appear at the bottom of the
-// the compiled file.
+// compiled file.
 //
-// WARNING: THE FIRST BLANK LINE MARKS THE END OF WHAT'S TO BE PROCESSED, ANY BLANK LINE SHOULD
-// GO AFTER THE REQUIRES BELOW.
+// Read Sprockets README (https://github.com/sstephenson/sprockets#sprockets-directives) for details
+// about supported directives.
 //
 //= require jquery
 //= require jquery_ujs
 
 // Stuff in app/assets
-//= require tracks.js
+//= require tracks
+//= require tracks_pages
+//= require disable_fx_in_test
 
 // Stuff in vendor/assets
 //= require jquery-ui-1.10.0.custom.min

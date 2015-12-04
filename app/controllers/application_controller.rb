@@ -1,16 +1,13 @@
-# The filters added to this controller will be run for all controllers in the
-# application. Likewise will all the methods added be available for all
-# controllers.
-
 require_dependency "login_system"
 require_dependency "tracks/source_view"
 
 class ApplicationController < ActionController::Base
-
-  protect_from_forgery
+  # Prevent CSRF attacks by raising an exception.
+  # For APIs, you may want to use :null_session instead.
+  protect_from_forgery with: :exception
 
   include LoginSystem
-  helper_method :current_user, :prefs, :format_date, :markdown
+  helper_method :current_user, :prefs, :format_date
 
   layout proc{ |controller| controller.mobile? ? "mobile" : "application" }
   # exempt_from_layout /\.js\.erb$/
@@ -20,6 +17,7 @@ class ApplicationController < ActionController::Base
   before_filter :set_time_zone
   before_filter :set_zindex_counter
   before_filter :set_locale
+  append_before_filter :set_group_view_by
   prepend_before_filter :login_required
   prepend_before_filter :enable_mobile_content_negotiation
   after_filter :set_charset
@@ -43,23 +41,20 @@ class ApplicationController < ActionController::Base
 
   def set_session_expiration
     # http://wiki.rubyonrails.com/rails/show/HowtoChangeSessionOptions
-    unless session == nil
-      return if self.controller_name == 'feed' or session['noexpiry'] == "on"
-      # If the method is called by the feed controller (which we don't have
-      # under session control) or if we checked the box to keep logged in on
-      # login don't set the session expiry time.
-      if session
-        # Get expiry time (allow ten seconds window for the case where we have
-        # none)
-        expiry_time = session['expiry_time'] || Time.now + 10
-        if expiry_time < Time.now
-          # Too late, matey...  bang goes your session!
-          reset_session
-        else
-          # Okay, you get another hour
-          session['expiry_time'] = Time.now + (60*60)
-        end
-      end
+    # If the method is called by the feed controller (which we don't have
+    # under session control) or if we checked the box to keep logged in on
+    # login don't set the session expiry time.
+    return if session.nil? || self.controller_name == 'feed' || session['noexpiry'] == "on"
+
+    # Get expiry time (allow ten seconds window for the case where we have
+    # none)
+    expiry_time = session['expiry_time'] || Time.now + 10
+    if expiry_time < Time.now
+      # Too late, matey...  bang goes your session!
+      reset_session
+    else
+      # Okay, you get another hour
+      session['expiry_time'] = Time.now + (60*60)
     end
   end
 
@@ -96,7 +91,7 @@ class ApplicationController < ActionController::Base
     if todos_parent.nil?
       count = 0
     elsif (todos_parent.is_a?(Project) && todos_parent.hidden?)
-      count = eval "@project_project_hidden_todo_counts[#{todos_parent.id}]"
+      count = @project_project_hidden_todo_counts[todos_parent.id]
     else
       count = eval "@#{todos_parent.class.to_s.downcase}_not_done_counts[#{todos_parent.id}]"
     end
@@ -111,7 +106,7 @@ class ApplicationController < ActionController::Base
   # config/settings.yml
   #
   def format_date(date)
-    return date ? date.in_time_zone(prefs.time_zone).strftime("#{prefs.date_format}") : ''
+    return prefs.format_date(date)
   end
 
   def for_autocomplete(coll, substr)
@@ -152,44 +147,12 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  def create_todo_from_recurring_todo(rt, date=nil)
-    # create todo and initialize with data from recurring_todo rt
-    todo = current_user.todos.build( { :description => rt.description, :notes => rt.notes, :project_id => rt.project_id, :context_id => rt.context_id})
-    todo.recurring_todo_id = rt.id
-
-    # set dates
-    todo.due = rt.get_due_date(date)
-
-    show_from_date = rt.get_show_from_date(date)
-    if show_from_date.nil?
-      todo.show_from=nil
-    else
-      # make sure that show_from is not in the past
-      todo.show_from = show_from_date < Time.zone.now ? nil : show_from_date
-    end
-
-    saved = todo.save
-    if saved
-      todo.tag_with(rt.tag_list)
-      todo.tags.reload
-    end
-
-    # increate number of occurences created from recurring todo
-    rt.inc_occurences
-
-    # mark recurring todo complete if there are no next actions left
-    checkdate = todo.due.nil? ? todo.show_from : todo.due
-    rt.toggle_completion! unless rt.has_next_todo(checkdate)
-
-    return saved ? todo : nil
-  end
-
   def handle_unverified_request
     unless request.format=="application/xml"
       super # handle xml http auth via our own login code
     end
   end
-  
+
   def sanitize(arg)
     ActionController::Base.helpers.sanitize(arg)
   end
@@ -197,7 +160,7 @@ class ApplicationController < ActionController::Base
   protected
 
   def admin_login_required
-    unless User.find_by_id_and_is_admin(session['user_id'], true)
+    unless User.find(session['user_id']).is_admin
       render :text => t('errors.user_unauthorized'), :status => 401
       return false
     end
@@ -290,6 +253,41 @@ class ApplicationController < ActionController::Base
   def set_zindex_counter
     # this counter can be used to handle the IE z-index bug
     @z_index_counter = 500
+  end
+
+  def todo_xml_params
+    if params[:limit_fields] == 'index'
+      return [:only => [:id, :created_at, :updated_at, :completed_at] ]
+    else
+      return [:except => :user_id, :include => [:tags, :predecessors, :successors] ]
+    end
+  end
+
+  def all_done_todos_for(object)
+    object_name = object.class.name.downcase # context or project
+    @source_view = "all_done"
+    @page_title = t("#{object_name.pluralize}.all_completed_tasks_title", "#{object_name}_name".to_sym => object.name)
+
+    @done = object.todos.completed.reorder('completed_at DESC').includes(Todo::DEFAULT_INCLUDES).
+      paginate(:page => params[:page], :per_page => 20)
+    @count = @done.size
+    render :template => 'todos/all_done'
+  end
+
+  def done_todos_for(object)
+    object_name = object.class.name.downcase # context or project
+    @source_view = "done"
+    eval("@#{object_name} = object")
+    @page_title = t("#{object_name.pluralize}.completed_tasks_title", "#{object_name}_name".to_sym => object.name)
+
+    @done_today, @done_rest_of_week, @done_rest_of_month = DoneTodos.done_todos_for_container(object.todos)
+    @count = @done_today.size + @done_rest_of_week.size + @done_rest_of_month.size
+
+    render :template => 'todos/done'
+  end
+
+  def set_group_view_by
+    @group_view_by = params['_group_view_by'] || cookies['group_view_by'] || 'context'
   end
 
 end

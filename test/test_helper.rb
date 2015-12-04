@@ -1,20 +1,33 @@
-require 'simplecov'
-SimpleCov.start 'rails'
-
-ENV["RAILS_ENV"] = "test"
+ENV['RAILS_ENV'] ||= 'test'
 require File.expand_path('../../config/environment', __FILE__)
 require 'rails/test_help'
 
 # set config for tests. Overwrite those read from config/site.yml. Use inject to avoid warning about changing CONSTANT
-{"salt" => "change-me", "authentication_schemes" => ["database", "open_id", "ldap"], "prefered_auth" => "database"}.inject( SITE_CONFIG ) { |h, elem| h[elem[0]] = elem[1]; h }
+{ "salt" => "change-me", "authentication_schemes" => ["database"], "prefered_auth" => "database", "email_dispatch" => nil}.inject( SITE_CONFIG ) { |h, elem| h[elem[0]] = elem[1]; h }
 
 class ActiveSupport::TestCase
-  # Setup all fixtures in test/fixtures/*.(yml|csv) for all tests in alphabetical order.
+  # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
   #
   # Note: You'll currently still have to declare fixtures explicitly in integration tests
   # -- they do not yet inherit this setting
   fixtures :all
-    
+
+  def setup
+    Time.zone = SITE_CONFIG['time_zone']
+    @today = Time.zone.now
+    @tomorrow = @today + 1.day
+    @in_three_days = @today + 3.days
+    @in_four_days = @in_three_days + 1.day    # need a day after start_from
+
+    @friday = Time.zone.local(2008,6,6)
+    @saturday = Time.zone.local(2008,6,7)
+    @sunday = Time.zone.local(2008,6,8)  # june 8, 2008 was a sunday
+    @monday = Time.zone.local(2008,6,9)
+    @tuesday = Time.zone.local(2008,6,10)
+    @wednesday = Time.zone.local(2008,6,11)
+    @thursday = Time.zone.local(2008,6,12)
+  end
+
   # Add more helper methods to be used by all tests here...
   def assert_value_changed(object, method = nil)
     initial_value = object.send(method)
@@ -89,7 +102,7 @@ class ActionController::TestCase
   
 end
 
-class ActionController::IntegrationTest
+class ActionDispatch::IntegrationTest
 
   def authenticated_post_xml(url, username, password, parameters, headers = {})
     post url, parameters,

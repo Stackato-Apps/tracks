@@ -1,5 +1,5 @@
 class UsersController < ApplicationController
-  
+
   before_filter :admin_login_required, :only => [ :index, :show, :destroy ]
   skip_before_filter :login_required, :only => [ :new, :create ]
   skip_before_filter :check_for_deprecated_password_hash,
@@ -11,14 +11,14 @@ class UsersController < ApplicationController
     respond_to do |format|
       format.html do
         @page_title = "TRACKS::Manage Users"
-        @users = User.paginate :page => params[:page], :order => 'login ASC'
+        @users = User.order('login ASC').paginate :page => params[:page]
         @total_users = User.count
         # When we call users/signup from the admin page we store the URL so that
         # we get returned here when signup is successful
         store_location
       end
       format.xml do
-        @users  = User.order('login').all
+        @users  = User.order('login')
         render :xml => @users.to_xml(:except => [ :password ])
       end
     end
@@ -68,6 +68,7 @@ class UsersController < ApplicationController
       render_failure "Expected post format is valid xml like so: <user><login>username</login><password>abc123</password></user>."
       return
     end
+
     respond_to do |format|
       format.html do
         unless User.no_users_yet? || (@user && @user.is_admin?) || SITE_CONFIG['open_signups']
@@ -77,21 +78,7 @@ class UsersController < ApplicationController
           return
         end
 
-        user = User.new(params['user'])
-
-        if Tracks::Config.auth_schemes.include?('ldap') &&
-            user.auth_type == 'ldap' &&
-            !SimpleLdapAuthenticator.valid?(user.login, params['user']['password'])
-          notify :warning, "Incorrect password"
-          redirect_to signup_path
-          return
-        end
-
-        if Tracks::Config.auth_schemes.include?('cas')
-          if user.auth_type.eql? "cas"
-             user.crypted_password = "cas"
-          end
-        end
+        user = User.new(user_params)
 
         unless user.valid?
           session['new_user'] = user
@@ -121,8 +108,8 @@ class UsersController < ApplicationController
           render_failure "Expected post format is valid xml like so: <user><login>username</login><password>abc123</password></user>.", 400
           return
         end
-        user = User.new(params[:user])
-        user.password_confirmation = params[:user][:password]
+        user = User.new(user_params)
+        user.password_confirmation = user_params[:password]
         saved = user.save
         unless user.new_record?
           render :text => t('users.user_created'), :status => 200
@@ -138,7 +125,7 @@ class UsersController < ApplicationController
   def destroy
     @deleted_user = User.find(params[:id])
     @saved = @deleted_user.destroy
-    @total_users = User.all.size
+    @total_users = User.count
 
     respond_to do |format|
       format.html do
@@ -160,7 +147,7 @@ class UsersController < ApplicationController
 
   def update_password
     # is used for focing password change after sha->bcrypt upgrade
-    current_user.change_password(params[:user][:password], params[:user][:password_confirmation])
+    current_user.change_password(user_params[:password], user_params[:password_confirmation])
     notify :notice, t('users.password_updated')
     redirect_to preferences_path
   rescue Exception => error
@@ -173,7 +160,7 @@ class UsersController < ApplicationController
   end
 
   def update_auth_type
-    current_user.auth_type = params[:user][:auth_type]
+    current_user.auth_type = user_params[:auth_type]
     if current_user.save
       notify :notice, t('users.auth_type_updated')
       redirect_to preferences_path
@@ -191,6 +178,10 @@ class UsersController < ApplicationController
   end
 
   private
+
+  def user_params
+    params.require(:user).permit(:login, :first_name, :last_name, :password_confirmation, :password, :auth_type, :open_id_url)
+  end
 
   def get_new_user
     if session['new_user']

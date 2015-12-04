@@ -136,9 +136,9 @@ Feature: Show done
   @javascript
   Scenario Outline: I can toggle a todo active from the done pages
     When I go to the <page>
-    Then I should see "todo 1"
+    Then I should see the todo "todo 1"
     When I mark the completed todo "todo 1" active
-    Then I should not see "todo 1"
+    Then I should not see the todo "todo 1"
     When I go to the <next page>
     Then I should see "todo 1" <where>
 
@@ -152,6 +152,14 @@ Feature: Show done
     | all done actions page for context "@pc"         | context page for "@pc"  |                                     |
     | all done actions page for project "test project"| "test project" project  |                                     |
     | all done actions page for tag "starred"         | home page               | in the context container for "@pc"  |
+
+  @javascript
+  Scenario: Activating the last todo will show empty message
+    When I go to the done actions page
+    Then I should see "todo 1" in the done today container
+    When I mark the completed todo "todo 1" active
+    Then I should not see the todo "todo 1"
+    And I should see empty message for done today of done actions
 
   @javascript
   Scenario Outline: I can toggle the star of a todo from the done pages
@@ -177,7 +185,7 @@ Feature: Show done
     When I go to the done projects page
     Then I should see "completed project"
     When I edit the project state of "completed project" to "active"
-    Then I should not see "completed project"
+    Then I should not see the project "completed project"
     When I go to the projects page
     Then I should see "completed project"
 
@@ -228,11 +236,11 @@ Feature: Show done
     | all done actions page for context "@pc"         | fr      |
     | all done actions page for project "test project"| fr      |
     | all done actions page for tag "starred"         | fr      |
-    | done actions page                               | cz      |
-    | all done actions page                           | cz      |
-    | done actions page for context "@pc"             | cz      |
-    | done actions page for project "test project"    | cz      |
-    | done actions page for tag "starred"             | cz      |
-    | all done actions page for context "@pc"         | cz      |
-    | all done actions page for project "test project"| cz      |
-    | all done actions page for tag "starred"         | cz      |
+    | done actions page                               | cs      |
+    | all done actions page                           | cs      |
+    | done actions page for context "@pc"             | cs      |
+    | done actions page for project "test project"    | cs      |
+    | done actions page for tag "starred"             | cs      |
+    | all done actions page for context "@pc"         | cs      |
+    | all done actions page for project "test project"| cs      |
+    | all done actions page for tag "starred"         | cs      |

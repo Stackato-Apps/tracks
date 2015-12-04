@@ -1,4 +1,5 @@
-require 'aruba/cucumber'
+# commented out because aruba 0.5 conflics
+# require 'aruba/cucumber'
 
 require 'capybara/rails'
 require 'capybara/cucumber'
@@ -7,6 +8,7 @@ require 'capybara/session'
 
 Capybara.default_wait_time = 5
 Capybara.javascript_driver = ENV["JS_DRIVER"] ? ENV["JS_DRIVER"].to_sym : :selenium
+Capybara.ignore_hidden_elements = false # make find(css) find hidden elements
 
 if Capybara.javascript_driver == :webkit
 #  require 'capybara/webkit'

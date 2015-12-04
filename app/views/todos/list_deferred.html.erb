@@ -1,10 +1,12 @@
 <div id="display_box">
 
-  <div id="tickler-empty-nd" style="display:<%= (@count == 0) ? 'block' : 'none'%>;">
-    <div class="message"><p><%= t('todos.no_deferred_actions') %></p></div>
-  </div>
+  <%= empty_message_holder("deferred_pending", @not_done_todos.empty?) %>
 
-  <%= render :partial => @contexts, :locals => { :collapsible => true } %>
+  <%= show_grouped_todos %>
+
+  <% if @group_view_by == 'project' -%>
+    <%= show_todos_without_project(@todos_without_project) -%>
+  <% end -%>
 
 </div>
 <div id="input_box">

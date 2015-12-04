@@ -1,6 +1,6 @@
-require File.expand_path(File.dirname(__FILE__) + '/../test_helper')
+require 'test_helper'
 
-class UsersXmlApiTest < ActionController::IntegrationTest
+class UsersXmlApiTest < ActionDispatch::IntegrationTest
   
   @@foobar_postdata = "<user><login>foo</login><password>bar</password></user>"
   @@johnny_postdata = "<user><login>johnny</login><password>barracuda</password></user>"
@@ -56,7 +56,7 @@ class UsersXmlApiTest < ActionController::IntegrationTest
       authenticated_post_xml_to_user_create @@johnny_postdata
       assert_response_and_body 200, "User created."
     end
-    johnny1 = User.find_by_login('johnny')
+    johnny1 = User.where(:login => 'johnny').first
     assert_not_nil johnny1, "expected user johnny to be created"
     johnny2 = User.authenticate('johnny','barracuda')
     assert_not_nil johnny2, "expected user johnny to be authenticated"

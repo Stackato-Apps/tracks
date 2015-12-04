@@ -5,11 +5,12 @@
     <%= stylesheet_link_tag "application", :media => "all" %>
     <%= stylesheet_link_tag "print", :media => "print" %>
     <%= javascript_include_tag "application" %>
-    <%= csrf_meta_tag %>
+    <%= csrf_meta_tags %>
     <script type="text/javascript">
       var SOURCE_VIEW = '<%=@source_view%>';
       var AUTH_TOKEN = '<%= raw(protect_against_forgery? ? form_authenticity_token.inspect : "") %>'
       var TAG_NAME = '<%= @tag_name ? @tag_name : "" %>'
+      var GROUP_VIEW_BY = '<%= @group_view_by ? @group_view_by : "" %>'
       var defaultContexts = <%= default_contexts_for_autocomplete.html_safe rescue '{}' %>;
       var defaultTags = <%= default_tags_for_autocomplete.html_safe rescue '{}' %>;
       var dateFormat = '<%= date_format_for_date_picker %>';
@@ -34,8 +35,6 @@
   <body class="<%= controller.controller_name %>">
 
     <div id="topbar">
-      <%= NOTIFY_BAR.html_safe %>
-
       <div id="date">
         <h1>
           <% if @count -%>
@@ -45,10 +44,6 @@
         </h1>
       </div>
       <div id="minilinks">
-        <%= link_to(t('layouts.toggle_contexts'), "#", {:title => t('layouts.toggle_contexts_title'), :id => "toggle-contexts-nav"}) %>
-        &nbsp;|&nbsp;
-	       <%= link_to(t('layouts.toggle_notes'), "#", {:accesskey => "S", :title => t('layouts.toggle_notes_title'), :id => "toggle-notes-nav"}) %>
-        &nbsp;|&nbsp;
         <%= link_to("#{t('common.logout')} (#{current_user.display_name}) &raquo;".html_safe, logout_path) %>
       </div>
       <div id="navcontainer">
@@ -61,22 +56,27 @@
             <ul>
               <li><%= navigation_link( t('common.contexts'), contexts_path, {:accesskey=>"c", :title=>t('layouts.navigation.contexts_title')} ) %></li>
               <li><%= navigation_link( t('common.notes'), notes_path, {:accesskey => "o", :title => t('layouts.navigation.notes_title')} ) %></li>
-      	      <li><%= navigation_link( t('common.review'), review_path, {:accesskey => "r", :title => t('layouts.navigation.review_title')} ) %></li>
+              <li><%= navigation_link( t('common.review'), review_path, {:accesskey => "r", :title => t('layouts.navigation.review_title')} ) %></li>
               <li><%= navigation_link( t('layouts.navigation.recurring_todos'), {:controller => "recurring_todos", :action => "index"}, :title => t('layouts.navigation.recurring_todos_title')) %></li>
             </ul>
           </li>
-          <li><a href="#"><%= t('layouts.navigation.view') %></a>
+          <li id="menu_view"><a href="#" id="menu_view_link"><%= t('layouts.navigation.view') %></a>
             <ul>
               <li><%= navigation_link( t('layouts.navigation.calendar'), calendar_path, :title => t('layouts.navigation.calendar_title')) %></li>
               <li><%= navigation_link( t('layouts.navigation.completed_tasks'), done_overview_path, {:accesskey=>"d", :title=>t('layouts.navigation.completed_tasks_title')} ) %></li>
               <li><%= navigation_link( t('layouts.navigation.feeds'), feeds_path, :title => t('layouts.navigation.feeds_title')) %></li>
               <li><%= navigation_link( t('layouts.navigation.stats'), stats_path, :title => t('layouts.navigation.stats_title')) %></li>
+              <li><hr/></li>
+              <li id="menu_view_toggle_contexts"><%= link_to(t('layouts.toggle_contexts'), "#", {:title => t('layouts.toggle_contexts_title'), :id => "toggle-contexts-nav"}) %></li>
+              <li><%= link_to(t('layouts.toggle_notes'), "#", {:accesskey => "S", :title => t('layouts.toggle_notes_title'), :id => "toggle-notes-nav"}) %></li>
+              <%= group_view_by_menu_entry %>
             </ul>
           </li>
           <li><a href="#"><%= t('layouts.navigation.admin') %></a>
             <ul>
               <li><%= navigation_link( t('layouts.navigation.preferences'), preferences_path, {:accesskey => "u", :title => t('layouts.navigation.preferences_title')} ) %></li>
-              <li><%= navigation_link( t('layouts.navigation.export'), data_path, {:accesskey => "i", :title => t('layouts.navigation.export_title')} ) %></li>
+              <li><%= navigation_link( t('layouts.navigation.export'), data_path, {:accesskey => "e", :title => t('layouts.navigation.export_title')} ) %></li>
+              <li><%= navigation_link( t('layouts.navigation.import'), import_data_path, {:accesskey => "i", :title => t('layouts.navigation.import_title')} ) %></li>
               <% if current_user.is_admin? -%>
                 <li><%= navigation_link(t('layouts.navigation.manage_users'), users_path, {:accesskey => "a", :title => t('layouts.navigation.manage_users_title')} ) %></li>
               <% end -%>

@@ -1,4 +1,4 @@
-Feature: Create project from template
+Feature: Create project from template on console
   In order to be able to create a project from a template
   As a user who has installed Tracks with console access
   I want to run the script to add projects and actions from a template
@@ -14,18 +14,18 @@ Feature: Create project from template
     And I have logged in as "testuser" with password "secret"
     And I have a context called "Context A"
   
-  @javascript @announce @wip
+  @javascript @aruba 
   Scenario: Create a project with one task
     Given a template that looks like
       """
       My first project
       .My first task in this project
       """
-    When I execute the script
+    When I execute the template script
     Then I should have a project called "My first project"
     And I should have 1 todo in project "My first project"
     
-  @javascript @wip
+  @javascript @aruba 
   Scenario: Create a project with dependent tasks
     Given a template that looks like
       """
@@ -33,5 +33,5 @@ Feature: Create project from template
       .Todo
       ^Dependent
       """
-    When I execute the script
+    When I execute the template script
     Then the successors of "Todo" should include "Dependent"

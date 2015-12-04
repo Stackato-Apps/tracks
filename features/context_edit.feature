@@ -14,8 +14,7 @@ Feature: Edit a context
 
   @javascript
   Scenario: In place edit of context name
-    Given I have a context called "Errands"
-    When I go to the context page for "Errands"
+    When I go to the context page for "@pc"
     And I edit the context name in place to be "OutAndAbout"
     Then I should see the context name is "OutAndAbout"
     When I go to the contexts page
@@ -30,14 +29,14 @@ Feature: Edit a context
     Then I should not see the todo "todo 1"
     And the badge should show 1
 
-  @javascript
+  @javascript 
   Scenario: Editing the description of a a todo will update that todo
     When I go to the the context page for "@pc"
     And I edit the description of "test_project todo 1" to "changed"
     Then I should not see the todo "test_project todo 1"
     And I should see "changed"
 
-  @javascript
+  @javascript 
   Scenario: Editing the context of the last todo will remove the todo and show empty message
     When I go to the the context page for "@pc"
     And I edit the context of "test_project todo 1" to "@laptop"
@@ -97,7 +96,7 @@ Feature: Edit a context
     And I should see empty message for deferred todos of context
     And I should not see empty message for todos of context
 
-  @javascript
+  @javascript 
   Scenario: Making all deferred todos inactive will show empty message
     Given I have a context "test" with 1 deferred todos
     When I go to the "test" context

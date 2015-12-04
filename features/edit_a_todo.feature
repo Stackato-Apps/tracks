@@ -20,38 +20,62 @@ Feature: Edit a next action from every page
     Then I should see "star me"
 
   @javascript
-  Scenario: I can delete a todo
+  Scenario Outline: I can delete a todo
     Given I have a todo "delete me" in the context "@home"
+    And I have selected the view for group by <grouping>
     When I go to the home page
     Then I should see "delete me"
     When I delete the action "delete me"
     Then I should not see "delete me"
 
-  @javascript @wip
-  Scenario: Removing the last todo in context will hide context
-  # this script fails on https://code.google.com/p/selenium/issues/detail?id=3075 for selenium-webdriver > 2.14.
-  # and selenium-webdriver < 2.20 fails on firefox 11 :-( So @wip for now. This will work on webkit though
-    Given I have a todo "delete me" in the context "@home"
+    Scenarios:
+      | grouping |
+      | context  |
+      | project  |
+
+  @javascript 
+  Scenario Outline: Removing the last todo in container will hide that container
+    Given I have a todo "delete me" in the context "@home" in the project "do it!"
+    And I have selected the view for group by <grouping>
     When I go to the home page
-    Then I should see the container for context "@home"
-    And I should see "delete me" in the context container for "@home"
+    Then I should see the <container> 
+    And I should see "delete me" in the <container> 
     When I mark "delete me" as complete
-    Then I should not see the container for context "@home"
+    Then I should not see the <container>
     And I should see "delete me" in the completed container
     When I mark "delete me" as uncompleted
-    Then I should see the container for context "@home"
-    When I edit the context of "delete me" to "@pc"
-    Then I should not see the container for context "@home"
-    And I should see the container for context "@pc"
-    And I should see "delete me" in the context container for "@pc"
-    And I delete the todo "delete me"
+    Then I should see the <container>
+    And I should see "delete me" in the <container>
+
+    Scenarios:
+      | grouping | container                      |
+      | context  | container for context "@home"  |
+      | project  | container for project "do it!" |
+
+  @javascript
+  Scenario Outline: Changing container of the todo in that container will hide it
+    Given I have a todo "delete me" in the context "@home" in the project "do it"
+    And I have a project "go for it"
+    And I have selected the view for group by <grouping>
+    When I go to the home page
+    And I edit the <grouping> of "delete me" to <new_grouping>
+    Then I should not see the <container>
+    And I should see the <new_container>
+    And I should see "delete me" in the <new_container>
+    When I delete the todo "delete me"
     Then I should not see the todo "delete me"
-    And I should not see the container for context "@home"
-    And I should not see the container for context "@pc"
+    And I should not see the <container>
+    And I should not see the <new_container>
+
+    Scenarios:
+      | grouping | container                      | new_grouping | new_container                      |
+      | context  | container for context "@home"  | "@pc"        | container for context "@pc"        |
+      | project  | container for project "do it"  | "go for it"  | container for project "go for it"  |
 
   @javascript
   Scenario Outline: Deleting the last todo in container will show empty message # only project, context, tag, not todo
     Given I have a context called "@home"
+    And I have selected the view for group by <grouping>
     And I have a project "my project" that has the following todos
       | context | description   | tags      |
       | @home   | first action  | test, bla |
@@ -65,12 +89,15 @@ Feature: Edit a next action from every page
     Then I should see empty message for todos of <page type>
 
     Scenarios:
-      | page                     | page type      |
-      | "my project" project     | project        |
-      | context page for "@home" | context        |
-      | tag page for "bla"       | tag            |
+      | page                     | page type      | grouping |
+      | "my project" project     | project        | project  |
+      | "my project" project     | project        | context  |
+      | context page for "@home" | context        | context  |
+      | context page for "@home" | context        | project  |
+      | tag page for "bla"       | tag            | context  |
+      | tag page for "bla"       | tag            | project  |
 
-  @javascript
+  @javascript 
   Scenario Outline: I can mark an active todo complete and it will update empty messages
     Given I have a context called "visible context"
     And I have a project called "visible project"
@@ -85,8 +112,8 @@ Feature: Edit a next action from every page
 
     Scenarios:
       | page                               | page type |
-      | "visible project" project          | project   |
       | home page                          | home      |
+      | "visible project" project          | project   |
       | tag page for "starred"             | tag       |
       | context page for "visible context" | context   |
 
@@ -109,26 +136,29 @@ Feature: Edit a next action from every page
       | "visible project" project          | project    |
       | context page for "visible context" | context    |
 
-  @javascript
+  @javascript 
   Scenario Outline: I can mark a completed todo active and it will update empty messages and context containers
     Given I have a completed todo with description "visible todo" in project "visible project" with tags "starred" in the context "visible context"
+    And I have selected the view for group by <grouping>
     When I go to the <page>
     Then I should see empty message for todos of <page type>
-    And I should not see the container for context "visible context"
+    And I should not see the <container>
     And I should not see empty message for completed todos of <page type>
     When I mark the completed todo "visible todo" active
-    Then I should see the container for context "visible context"
+    Then I should see the <container>
     And I should see empty message for completed todos of <page type>
-    And I should see "visible todo" in the context container for "visible context"
+    And I should see "visible todo" in the <container>
     And I should not see empty message for todos of <page type>
 
     Scenarios:
-      | page                   | page type                |
-      | tag page for "starred" | tag                      |
-      | home page              | home                     |
+      | page                   | page type                | grouping | container                               |
+      | tag page for "starred" | tag                      | context  | container for context "visible context" |
+      | tag page for "starred" | tag                      | project  | container for project "visible project" |
+      | home page              | home                     | context  | container for context "visible context" |
+      | home page              | home                     | project  | container for project "visible project" |
 
-  @javascript
-  Scenario Outline: I can mark a completed todo active and it will update empty messages for pages without context containers
+  @javascript 
+  Scenario Outline: I can mark a completed todo active and it will update empty messages for pages without hideable containers
     Given I have a completed todo with description "visible todo" in project "visible project" with tags "starred" in the context "visible context"
     When I go to the <page>
     Then I should see empty message for todos of <page type>
@@ -145,36 +175,43 @@ Feature: Edit a next action from every page
   @javascript
   Scenario Outline: I can edit a todo to change its description
     Given I have a todo with description "visible todo" in project "visible project" with tags "starred" in the context "visible context" that is due next week
+    And I have selected the view for group by <grouping>
     When I go to the <page>
     And I edit the description of "visible todo" to "changed todo"
     Then I should not see the todo "visible todo"
     And I should see the todo "changed todo"
 
     Scenarios:
-      | page                               |
-      | home page                          |
-      | context page for "visible context" |
-      | "visible project" project          |
-      | tag page for "starred"             |
-      | calendar page                      |
+      | page                               | grouping |
+      | home page                          | context  |
+      | home page                          | project  |
+      | context page for "visible context" | context  |
+      | "visible project" project          | context  |
+      | tag page for "starred"             | context  |
+      | tag page for "starred"             | project  |
+      | calendar page                      | context  |
 
   @javascript
-  Scenario Outline: I can edit a todo to move it to another context
+  Scenario Outline: I can edit a todo to move it to another container
     Given I have a context called "@laptop"
-    And I have a project "my project" that has the following todos
+    And I have selected the view for group by <grouping>
+    And I have a project "project 1" that has the following todos
       | context | description   | tags |
       | @pc     | first action  | bla  |
       | @laptop | second action | bla  |
+    And I have a project "project 2"
     When I go to the <page>
-    Then I should see "first action" in the context container for "@pc"
-    When I edit the context of "first action" to "@laptop"
-    Then I should not see "first action" in the context container for "@pc"
-    Then I should see "first action" in the context container for "@laptop"
+    Then I should see "first action" in the <container>
+    When I edit the <grouping> of "first action" to <new grouping>
+    Then I should not see "first action" in the <container>
+    Then I should see "first action" in the <new container>
 
     Scenarios:
-    | page               |
-    | home page          |
-    | tag page for "bla" |
+    | page               | grouping | container                         | new grouping  | new container                     |
+    | home page          | context  | context container for "@pc"       | "@laptop"     | context container for "@laptop"   |
+    | home page          | project  | project container for "project 1" | "project 2"   | project container for "project 2" |
+    | tag page for "bla" | context  | context container for "@pc"       | "@laptop"     | context container for "@laptop"   |
+    | tag page for "bla" | project  | project container for "project 1" | "project 2"   | project container for "project 2" |
 
   @javascript
   Scenario: I can edit a todo to move it to another context in tickler page
@@ -200,6 +237,13 @@ Feature: Edit a next action from every page
     Then I should see the todo "todo 1"
 
   @javascript
+  Scenario: I can give a todo without a project a blank project name
+    Given I have a todo "todo 1" in the context "@pc"
+    When I go to the home page
+    And I edit the project of "todo 1" to ""
+    Then I should see the todo "todo 1"
+
+  @javascript
   Scenario: I can edit a todo to move it to the tickler
     When I go to the home page
     And I submit a new action with description "start later" in the context "@pc"
@@ -208,10 +252,8 @@ Feature: Edit a next action from every page
     When I go to the tickler page
     Then I should see the todo "start later"
 
-  @javascript @wip
+  @javascript
   Scenario: I can defer a todo
-  # this script fails on https://code.google.com/p/selenium/issues/detail?id=3075 for selenium-webdriver > 2.14.
-  # and selenium-webdriver < 2.20 fails on firefox 11 :-( So @wip for now. This will work on webkit though
     When I go to the home page
     And I submit a new action with description "start later" in the context "@pc"
     And I defer "start later" for 1 day
@@ -219,10 +261,8 @@ Feature: Edit a next action from every page
     When I go to the tickler page
     Then I should see "start later"
 
-  @javascript @wip
+  @javascript
   Scenario: I can make a project from a todo
-  # this script fails on https://code.google.com/p/selenium/issues/detail?id=3075 for selenium-webdriver > 2.14.
-  # and selenium-webdriver < 2.20 fails on firefox 11 :-( So @wip for now. This will work on webkit though
     When I go to the home page
     And I submit a new action with description "buy mediacenter" in the context "@pc"
     And I make a project of "buy mediacenter"
@@ -267,23 +307,33 @@ Feature: Edit a next action from every page
     And I should see "tagc"
 
   @javascript
-  Scenario Outline: Editing the context of a todo to a new context will show new context
-    Given I have a todo "moving" in context "@pc" with tags "tag"
+  Scenario Outline: Editing the container of a todo to a new container will show new container
+    Given I have a todo "moving" in context "@pc" in project "project 1 " with tags "tag"
+    And I have selected the view for group by <grouping>
     When I go to the <page>
-    And I edit the context of "moving" to "@new"
-    And I should see the container for context "@new"
+    And I edit the <grouping> of "moving" to <new grouping>
+    And I should see the <container>
 
     Scenarios:
-    | page                |
-    | home page           |
-    | tag page for "tag"  |
+    | page                | grouping | new grouping | container                         |
+    | home page           | context  | "@new"       | container for context "@new"      |
+    | home page           | project  | "project 2"  | container for project "project 2" |
+    | tag page for "tag"  | context  | "@new"       | container for context "@new"      |
+    | tag page for "tag"  | project  | "project 2"  | container for project "project 2" |
 
   @javascript
   Scenario: Editing the context of a todo in the tickler to a new context will show new context
     Given I have a deferred todo "moving" in context "@pc" with tags "tag"
     When I go to the tickler page
     And I edit the context of "moving" to "@new"
-    And I should see the container for context "@new"
+    Then I should see the container for context "@new"
+
+  @javascript
+  Scenario: Editing the context of a todo in the project view to a new context will show new context
+    Given I have a todo "something" in the context "@pc" in the project "project"
+    When I go to the "project" project page
+    And I edit the context of "something" to "@new"
+    Then I should see the container for context "@new"
 
   @javascript
   Scenario: Making an error when editing a todo will show error message

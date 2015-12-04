@@ -1,36 +1,25 @@
 # Tracks: a GTD(TM) web application, built with Ruby on Rails
-Copyright (C) 2004-2014 rousette.org.uk
-
-## Deploying to Stackato
-
-1. `git clone https://github.com/Stackato-Apps/tracks`
-2. let the stackato_setup.sh script generate config/site.yml OR `cp config/site.yml.tmpl config/site.yml` and configure as needed
-3. `stackato push -n`
-
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
-
-[![Build Status](https://travis-ci.org/TracksApp/tracks.png?branch=2.2_branch)](https://travis-ci.org/TracksApp/tracks)
-[![Code Climate](https://codeclimate.com/badge.png)](https://codeclimate.com/github/TracksApp/tracks)
 
 * Project homepage: http://www.getontracks.org/
 * Manual: http://www.getontracks.org/manual/
 * Source at GitHub: https://github.com/TracksApp/tracks
 * Bug reports and feature requests: https://github.com/TracksApp/tracks/issues
 * Wiki (community contributed information): https://github.com/TracksApp/tracks/wiki
-* Forum (read-only): http://getontracks.org/forums/
 * Mailing list: http://groups.google.com/group/TracksApp
+* IRC channel: #tracks on Freenode
 * Original developer: bsag (http://www.rousette.org.uk/)
 * Contributors: https://github.com/TracksApp/tracks/wiki/Contributors
-* Version: 2.2.3
+* Version: 2.3.0
 
-More documentation for Tracks can be found within the /doc directory. 
+## Deploying to Stackato
 
-The manual can be found at the website mentioned above. The manual includes
-full instructions for both new installations and upgrades from older 
-installations of Tracks.
+1. let the stackato_setup.sh script generate config/site.yml OR `cp config/site.yml.tmpl config/site.yml` and configure the `salt` and `secret_token` values 
+2. `stackato push -n`
+
+[![Build Status](https://travis-ci.org/TracksApp/tracks.svg?branch=2.3_branch)](https://travis-ci.org/TracksApp/tracks)
+
+Full instructions for both new installations and upgrades from older installations of Tracks
+can be found within the /doc directory.
 
 The instructions might appear long and intimidatingly complex, but that is
 mostly because of the number of different platforms supported, and the
@@ -38,23 +27,29 @@ different configurations which can be used (e.g. running Tracks on your local
 computer or on a remote server). If you choose the appropriate section for your
 situation (installation vs. upgrade), and use the easiest (recommended) method,
 you should find the instructions easy to follow. If you encounter problems, try
-searching the wiki, forum or mailing list (URLs above), and ask a question if
+searching the wiki or mailing list (URLs above), and ask a question if
 you cannot find a solution to your problem.
 
-The wiki has a lot of user contributed installation HOWTOs for various webhosts, 
-specific OS's and more.
+The wiki has a lot of user contributed installation HOWTOs for various webhosts, specific OS's and more.
 
 If you are thinking about contributing towards the development of Tracks,
 please read /doc/README_DEVELOPERS for general information. Also you can find
-some information on development, testing and contributing on the wiki. And if 
-coding is not your thing, we welcome contributions in translations or (updates 
-on) HOWTO's on the wiki a lot!
+some information on development, testing and contributing on the wiki.
 
 While fully usable for everyday use, Tracks is still a work in progress. Make
 sure that you take sensible precautions and back up all your data frequently,
 taking particular care when you are upgrading.
 
 Enjoy being productive!
+
+--------------------------------------------------------------------------------
+
+Copyright (C) 2004-2014 rousette.org.uk
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of

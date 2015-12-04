@@ -4,18 +4,14 @@ require 'bcrypt'
 class User < ActiveRecord::Base
   # Virtual attribute for the unencrypted password
   attr_accessor :password
-  attr_protected :is_admin # don't allow mass-assignment for this
-  
-  attr_accessible :login, :first_name, :last_name, :password_confirmation, :password, :auth_type, :open_id_url
+
   #for will_paginate plugin
   cattr_accessor :per_page
   @@per_page = 5
 
-  has_many :contexts,
-           :order => 'position ASC',
-           :dependent => :delete_all do
+  has_many(:contexts, -> { order 'position ASC' }, dependent: :delete_all) do
              def find_by_params(params)
-               find_by_id(params['id'] || params['context_id']) || nil
+               find(params['id'] || params['context_id']) || nil
              end
              def update_positions(context_ids)
                 context_ids.each_with_index {|id, position|
@@ -25,11 +21,10 @@ class User < ActiveRecord::Base
                 }
               end
            end
-  has_many :projects,
-           :order => 'projects.position ASC',
-           :dependent => :delete_all do
+
+  has_many(:projects, -> {order 'projects.position ASC'}, dependent: :delete_all) do
               def find_by_params(params)
-                find_by_id(params['id'] || params['project_id'])
+                find(params['id'] || params['project_id'])
               end
               def update_positions(project_ids)
                 project_ids.each_with_index {|id, position|
@@ -61,17 +56,17 @@ class User < ActiveRecord::Base
               end
               def alphabetize(scope_conditions = {})
                 projects = where(scope_conditions)
-                projects.sort!{ |x,y| x.name.downcase <=> y.name.downcase }
+                projects.to_a.sort!{ |x,y| x.name.downcase <=> y.name.downcase }
                 self.update_positions(projects.map{ |p| p.id })
                 return projects
               end
               def actionize(scope_conditions = {})
                 todos_in_project = where(scope_conditions).includes(:todos)
-                todos_in_project.sort!{ |x, y| -(x.todos.active.count <=> y.todos.active.count) }
+                todos_in_project.to_a.sort!{ |x, y| -(x.todos.active.count <=> y.todos.active.count) }
                 todos_in_project.reject{ |p| p.todos.active.count > 0 }
                 sorted_project_ids = todos_in_project.map {|p| p.id}
 
-                all_project_ids = all.map {|p| p.id}
+                all_project_ids = self.map {|p| p.id}
                 other_project_ids = all_project_ids - sorted_project_ids
 
                 update_positions(sorted_project_ids + other_project_ids)
@@ -79,38 +74,41 @@ class User < ActiveRecord::Base
                 return where(scope_conditions)
               end
             end
-  has_many :todos,
-           :order => 'todos.completed_at DESC, todos.created_at DESC',
-           :dependent => :delete_all do
+
+  has_many(:todos, -> { order 'todos.completed_at DESC, todos.created_at DESC' }, dependent: :delete_all) do
               def count_by_group(g)
                 except(:order).group(g).count
               end
            end
+
   has_many :recurring_todos,
-           :order => 'recurring_todos.completed_at DESC, recurring_todos.created_at DESC',
-           :dependent => :delete_all
-  has_many :deferred_todos,
-           :class_name => 'Todo',
-           :conditions => [ 'state = ?', 'deferred' ],
-           :order => 'show_from ASC, todos.created_at DESC' do
+           -> {order 'recurring_todos.completed_at DESC, recurring_todos.created_at DESC'},
+           dependent: :delete_all
+
+  has_many(:deferred_todos,
+           -> { where('state = ?', 'deferred').
+                order('show_from ASC, todos.created_at DESC')},
+           :class_name => 'Todo') do
               def find_and_activate_ready
-                where('show_from <= ?', Time.zone.now).collect { |t| t.activate! }
+                where('show_from <= ?', Time.current).collect { |t| t.activate! }
               end
            end
-  has_many :notes, :order => "created_at DESC", :dependent => :delete_all
-  has_one :preference, :dependent => :destroy
+
+  has_many :notes, -> { order "created_at DESC" }, dependent: :delete_all
+  has_one :preference, dependent: :destroy
 
   validates_presence_of :login
-  validates_presence_of :password, :if => :password_required?
-  validates_length_of :password, :within => 5..40, :if => :password_required?
-  validates_presence_of :password_confirmation, :if => :password_required?
+  validates_presence_of :password, if: :password_required?
+  validates_length_of :password, within: 5..40, if: :password_required?
+  validates_presence_of :password_confirmation, if: :password_required?
   validates_confirmation_of :password
-  validates_length_of :login, :within => 3..80
-  validates_uniqueness_of :login, :on => :create
+  validates_length_of :login, within: 3..80
+  validates_uniqueness_of :login, on: :create
   validate :validate_auth_type
 
   before_create :crypt_password, :generate_token
   before_update :crypt_password
+  before_destroy :destroy_dependencies, :delete_taggings, prepend: true  # run before deleting todos, projects, contexts, etc.
 
   def validate_auth_type
     unless Tracks::Config.auth_schemes.include?(auth_type)
@@ -128,15 +126,6 @@ class User < ActiveRecord::Base
     if Tracks::Config.auth_schemes.include?('database')
       return candidate if candidate.auth_type == 'database' and
         candidate.password_matches? pass
-    end
-
-    if Tracks::Config.auth_schemes.include?('ldap')
-      return candidate if candidate.auth_type == 'ldap' && SimpleLdapAuthenticator.valid?(login, pass)
-    end
-
-    if Tracks::Config.auth_schemes.include?('cas')
-      # because we can not auth them with out thier real password we have to settle for this
-      return candidate if candidate.auth_type.eql?("cas")
     end
 
     return nil
@@ -171,16 +160,8 @@ class User < ActiveRecord::Base
     save!
   end
 
-  def time
-    Time.now.in_time_zone(prefs.time_zone)
-  end
-
   def date
-    time.midnight
-  end
-
-  def at_midnight(date)
-    return ActiveSupport::TimeZone[prefs.time_zone].local(date.year, date.month, date.day, 0, 0, 0)
+    Date.current
   end
 
   def generate_token
@@ -237,7 +218,19 @@ protected
   end
 
   def password_required?
-    auth_type == 'database' && crypted_password.blank? || !password.blank?
+    auth_type == 'database' && crypted_password.blank? || password.present?
+  end
+
+  def destroy_dependencies
+    ids = todos.pluck(:id)
+    pred_deps = Dependency.where(predecessor_id: ids).destroy_all
+    succ_deps = Dependency.where(predecessor_id: ids).destroy_all
+  end
+
+  def delete_taggings
+    ids = todos.pluck(:id)
+    taggings = Tagging.where(taggable_id: ids).pluck(:id)
+    Tagging.where(id: taggings).delete_all
   end
 
 end

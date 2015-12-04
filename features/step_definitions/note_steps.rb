@@ -1,5 +1,5 @@
 When /^I add note "([^\"]*)" from the "([^\"]*)" project page$/ do |note, project|
-  project = Project.find_by_name(project)
+  project = Project.where(:name => project).first
   project.notes.create!(:user_id => @current_user.id, :body => note)
 end
 
@@ -10,9 +10,9 @@ When /^I delete the first note$/ do
   handle_js_confirm do
     click_link "delete_note_#{id}"
   end
-  get_confirm_text.should == "Are you sure that you want to delete the note '#{id}'?"
+  expect(get_confirm_text).to eq("Are you sure that you want to delete the note '#{id}'?")
   
-  page.should_not have_css("a#delete_note_#{id}")
+  expect(page).to_not have_css("a#delete_note_#{id}")
 end
 
 When /^I click the icon next to the note$/ do
@@ -30,16 +30,18 @@ When /^I edit the first note to "([^"]*)"$/ do |note_body|
   end
 end
 
-When /^I toggle the note of "([^"]*)"$/ do |todo_description|
-  todo = @current_user.todos.find_by_description(todo_description)
-  todo.should_not be_nil
+When(/^I toggle the note of "([^"]*)"$/) do |todo_description|
+  todo = @current_user.todos.where(:description => todo_description).first
+  expect(todo).to_not be_nil
 
   xpath = "//div[@id='line_todo_#{todo.id}']/div/a/img"
   page.find(:xpath, xpath).click
 end
 
 When /^I click Toggle Notes$/ do
-  click_link 'Toggle notes'
+  open_view_menu do
+    click_link 'Toggle notes'
+  end
 end
 
 When /^I toggle all notes$/ do
@@ -50,11 +52,11 @@ Then /^(.*) notes should be visible$/ do |number|
   # count number of project_notes
   count = 0
   page.all("div.project_notes").each { |node| count += 1 }
-  count.should  == number.to_i
+  expect(count).to eq(number.to_i)
 end
 
 Then /^I should see note "([^\"]*)" on the "([^\"]*)" project page$/ do |note, project|
-  project = Project.find_by_name(project)
+  project = Project.where(:name => project).first
   visit project_path(project)
   step "I should see the note \"#{note}\""
 end
@@ -69,7 +71,7 @@ Then /^the first note should disappear$/ do
   id = title.split(' ').last
   note = "div#note_#{id}"
   
-  page.should_not have_css(note, :visible=>true)
+  expect(page).to_not have_css(note, :visible=>true)
 end
 
 Then /^I should see the note text$/ do
@@ -77,9 +79,9 @@ Then /^I should see the note text$/ do
 end
 
 Then /^I should not see the note "([^"]*)"$/ do |note_content|
-  page.should_not have_selector("div", :text => note_content, :visible => true)
+  expect(page).to_not have_selector("div", :text => note_content, :visible => true)
 end
 
 Then /^I should see the note "([^"]*)"$/ do |note_content|
-  page.all("div", :text => note_content).first.should be_visible
+  expect(page.all("div", :text => note_content).first).to be_visible
 end

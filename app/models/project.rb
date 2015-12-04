@@ -1,15 +1,18 @@
 class Project < ActiveRecord::Base
-  has_many :todos, :dependent => :delete_all, :order => 'todos.due IS NULL, todos.due ASC, todos.created_at ASC'
-  has_many :notes, :dependent => :delete_all, :order => "created_at DESC"
+  has_many :todos, -> {order("todos.due IS NULL, todos.due ASC, todos.created_at ASC")}, dependent: :delete_all
+  has_many :notes, -> {order "created_at DESC"}, dependent: :delete_all
   has_many :recurring_todos
 
   belongs_to :default_context, :class_name => "Context", :foreign_key => "default_context_id"
   belongs_to :user
 
-  scope :active, :conditions => { :state => 'active' }
-  scope :hidden, :conditions => { :state => 'hidden' }
-  scope :completed, :conditions => { :state => 'completed'}
-  scope :uncompleted, :conditions => ["NOT(state = ?)", 'completed']
+  scope :active,      -> { where state: 'active' }
+  scope :hidden,      -> { where state: 'hidden' }
+  scope :completed,   -> { where state: 'completed' }
+  scope :uncompleted, -> { where("NOT(state = ?)", 'completed') }
+
+  scope :with_name_or_description, lambda { |body| where("name LIKE ? OR description LIKE ?", body, body) }
+  scope :with_namepart, lambda { |body| where("name LIKE ?", body + '%') }
 
   validates_presence_of :name
   validates_length_of :name, :maximum => 255
@@ -18,48 +21,30 @@ class Project < ActiveRecord::Base
   acts_as_list :scope => 'user_id = #{user_id} AND state = \'#{state}\'', :top_of_list => 0
 
   include AASM
-  aasm_column :state
-  aasm.initial_state :active
 
-  # extend NamePartFinder
-  # include Tracks::TodoList
+  aasm :column => :state do
 
-  aasm.state :active
-  aasm.state :hidden, :enter => :hide_todos, :exit => :unhide_todos
-  aasm.state :completed, :enter => :set_completed_at_date, :exit => :clear_completed_at_date
+    state :active, :initial => true
+    state :hidden, :enter => :hide_todos, :exit => :unhide_todos
+    state :completed, :enter => :set_completed_at_date, :exit => :clear_completed_at_date
 
-  aasm.event :activate do
-    transitions :to => :active,   :from => [:active, :hidden, :completed]
+    event :activate do
+      transitions :to => :active,   :from => [:active, :hidden, :completed]
+    end
+
+    event :hide do
+      transitions :to => :hidden,   :from => [:active, :completed]
+    end
+
+    event :complete do
+      transitions :to => :completed, :from => [:active, :hidden]
+    end
   end
 
-  aasm.event :hide do
-    transitions :to => :hidden,   :from => [:active, :completed]
-  end
-
-  aasm.event :complete do
-    transitions :to => :completed, :from => [:active, :hidden]
-  end
-
-  attr_protected :user
   attr_accessor :cached_note_count
 
   def self.null_object
     NullProject.new
-  end
-
-  def self.create_from_todo(todo)
-    project = Project.new(:name => todo.description,
-                          :description => todo.notes,
-                          :default_context => todo.context)
-
-    project.user = todo.user
-
-    if project.valid?
-      todo.destroy
-      project.save!
-    end
-
-    project
   end
 
   def hide_todos
@@ -115,22 +100,22 @@ class Project < ActiveRecord::Base
     end
   end
 
-  def needs_review?(current_user)
+  def needs_review?(user)
     return active? && ( last_reviewed.nil? ||
-                        (last_reviewed < current_user.time - current_user.prefs.review_period.days))
+                        (last_reviewed < Time.current - user.prefs.review_period.days))
   end
 
   def blocked?
     ## mutually exclusive for stalled and blocked
     # blocked is uncompleted project with deferred or pending todos, but no next actions
     return false if self.completed?
-    return !self.todos.deferred_or_blocked.empty? && self.todos.not_deferred_or_blocked.empty?
+    return !self.todos.deferred_or_blocked.empty? && self.todos.active.empty?
   end
 
   def stalled?
     # Stalled projects are active projects with no active next actions
     return false if self.completed? || self.hidden?
-    return self.todos.deferred_or_blocked.empty? && self.todos.not_deferred_or_blocked.empty?
+    return self.todos.deferred_or_blocked.empty? && self.todos.active.empty?
   end
 
   def shortened_name(length=40)
@@ -138,11 +123,43 @@ class Project < ActiveRecord::Base
   end
 
   def name=(value)
-    self[:name] = value.gsub(/\s{2,}/, " ").strip
+    if value
+      self[:name] = value.gsub(/\s{2,}/, " ").strip
+    else
+      self[:name] = nil
+    end
   end
 
   def new_record_before_save?
     @new_record_before_save
+  end
+
+  def age_in_days
+    @age_in_days ||= (Time.current.to_date - created_at.to_date).to_i + 1
+  end
+
+  def running_time
+    if completed_at.nil?
+      return age_in_days
+    else
+      return (completed_at.to_date - created_at.to_date).to_i + 1
+    end
+  end
+
+  def self.import(filename, params, user)
+    count = 0
+    CSV.foreach(filename, headers: true) do |row|
+      unless find_by_name_and_user_id row[params[:name].to_i], user.id
+        project = new
+        project.name = row[params[:name].to_i]
+        project.user = user
+        project.description = row[params[:description].to_i] if row[params[:description].to_i].present?
+        project.state = 'active'
+        project.save!
+        count += 1
+      end
+    end
+    count
   end
 
 end
@@ -159,6 +176,14 @@ class NullProject
 
   def id
     nil
+  end
+
+  def name
+    ""
+  end
+
+  def persisted?
+    false
   end
 
 end

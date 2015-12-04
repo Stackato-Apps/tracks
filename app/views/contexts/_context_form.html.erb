@@ -3,7 +3,7 @@
 
 <%= form_for(context, :html => {
     :id => dom_id(context, 'edit_form'),
-    :class => "inline-form edit-project-form",
+    :class => "inline-form edit-context-form",
     :method => :put }) do
   -%>
 
@@ -12,9 +12,11 @@
   <label for="context_name"><%= t 'contexts.context_name' %></label><br/>
   <%= text_field('context', 'name', :class => 'context-name', :tabindex => next_tab_index) %><br/>
 
-  <label for="context_hide"><%= t 'contexts.context_hide' %>  </label>
-  <%= check_box('context', 'hide', {:class => 'context-hide', :tabindex => next_tab_index}) %>
-  <input type="hidden" name="wants_render" value="true" />
+  <label for="context_hide"><%= t 'contexts.context_state' %> </label><br/>
+  <% ['active', 'hidden', 'closed'].each do | state | %>
+    <%= radio_button(:context, 'state', state, {:tabindex => next_tab_index}) %> <%= state.titlecase %>
+  <% end %>
+  </br></br>
 
   <div class="submit_box">
     <div class="widgets">

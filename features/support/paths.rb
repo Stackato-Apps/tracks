@@ -6,8 +6,10 @@ module NavigationHelpers
   # step definition in web_steps.rb
   #
   def path_to(page_name)
-    options = @mobile_interface ? {:format => :m} : {}
-    options = {:locale => @locale}.merge(options) if @locale
+    options = {}
+    options[:format] = :m if @mobile_interface 
+    options[:locale] = @locale if @locale
+    options[:_group_view_by] = @group_view_by if @group_view_by
     @source_view = nil
     
     case page_name
@@ -21,11 +23,11 @@ module NavigationHelpers
       done_overview_path(options)
     when /the done actions page for context "([^"]*)"/i
       @source_view = "done"
-      context = @current_user.contexts.find_by_name($1)
+      context = @current_user.contexts.where(:name => $1).first
       done_todos_context_path(context, options)
     when /the done actions page for project "([^"]*)"/i
       @source_view = "done"
-      project = @current_user.projects.find_by_name($1)
+      project = @current_user.projects.where(:name => $1).first
       done_todos_project_path(project, options)
     when /the done actions page for tag "([^"]*)"/i
       @source_view = "done"
@@ -35,11 +37,11 @@ module NavigationHelpers
       done_todos_path(options)
     when /the all done actions page for context "([^"]*)"/i
       @source_view = "done"
-      context = @current_user.contexts.find_by_name($1)
+      context = @current_user.contexts.where(:name => $1).first
       all_done_todos_context_path(context, options)
     when /the all done actions page for project "([^"]*)"/i
       @source_view = "done"
-      project = @current_user.projects.find_by_name($1)
+      project = @current_user.projects.where(:name => $1).first
       all_done_todos_project_path(project, options)
     when /the all done actions page for tag "([^"]*)"/i
       @source_view = "done"
@@ -65,10 +67,10 @@ module NavigationHelpers
       @source_view = "review"
       review_path(options)
     when /the contexts page/
-      @source_view = "contexts"
+      @source_view = "context"
       contexts_path(options)
     when /the projects page/
-      @source_view = "projects"
+      @source_view = "project"
       projects_path(options)
     when /the manage users page/
       users_path(options)
@@ -93,23 +95,23 @@ module NavigationHelpers
       feeds_path(options)
     when /the context page for "([^\"]*)" for user "([^\"]*)"/i
       @source_view = "context"
-      @context = User.find_by_login($2).contexts.find_by_name($1)
+      @context = User.where(:login => $2).first.contexts.where(:name => $1).first
       context_path(@context, options)
     when /the context page for "([^\"]*)"/i
       @source_view = "context"
-      @context = @current_user.contexts.find_by_name($1)
+      @context = @current_user.contexts.where(:name => $1).first
       context_path(@context, options)
     when /the "([^\"]*)" context/i
       @source_view = "context"
-      @context = @current_user.contexts.find_by_name($1)
+      @context = @current_user.contexts.where(:name => $1).first
       context_path(@context, options)
     when /the "([^\"]*)" project for user "([^\"]*)"/i
       @source_view = "project"
-      @project = User.find_by_login($2).projects.find_by_name($1)
+      @project = User.where(:login => $2).first.projects.where(:name => $1).first
       project_path(@project, options)
     when /the "([^\"]*)" project/i
       @source_view = "project"
-      @project = @current_user.projects.find_by_name($1)
+      @project = @current_user.projects.where(:name => $1).first
       project_path(@project, options)
     when /the tag page for "([^"]*)"/i
       @source_view = "tag"
@@ -121,7 +123,7 @@ module NavigationHelpers
     # Here is an example that pulls values out of the Regexp:
     #
     #   when /^(.*)'s profile page$/i
-    #     user_profile_path(User.find_by_login($1))
+    #     user_profile_path(User.where(:login => $1))first.
 
     else
       begin

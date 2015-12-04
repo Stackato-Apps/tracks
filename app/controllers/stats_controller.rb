@@ -3,92 +3,87 @@ class StatsController < ApplicationController
   SECONDS_PER_DAY = 86400;
 
   helper :todos, :projects, :recurring_todos
-  append_before_filter :init
+  append_before_filter :init, :except => :index
 
   def index
     @page_title = t('stats.index_title')
-
-    @first_action = current_user.todos.reorder("created_at ASC").first
-    @tags_count = get_total_number_of_tags_of_user
-    @unique_tags_count = get_unique_tags_of_user.size
     @hidden_contexts = current_user.contexts.hidden
-
-    get_stats_actions
-    get_stats_contexts
-    get_stats_projects
-    get_stats_tags
+    @stats = Stats::UserStats.new(current_user)
   end
-  
+
   def actions_done_last12months_data
     # get actions created and completed in the past 12+3 months. +3 for running
-    #   average
-    @actions_done_last12months = current_user.todos.completed_after(@cut_off_year).select("completed_at" )
-    @actions_created_last12months = current_user.todos.created_after(@cut_off_year).select("created_at")
-    @actions_done_last12monthsPlus3 = current_user.todos.completed_after(@cut_off_year_plus3).select("completed_at" )
-    @actions_created_last12monthsPlus3 = current_user.todos.created_after(@cut_off_year_plus3).select("created_at")
+    # - outermost set of entries needed for these calculations
+    actions_last12months = current_user.todos.created_or_completed_after(@cut_off_year_plus3).select("completed_at,created_at")
 
     # convert to array and fill in non-existing months
-    @actions_done_last12months_array = convert_to_months_from_today_array(@actions_done_last12months, 13, :completed_at)
-    @actions_created_last12months_array = convert_to_months_from_today_array(@actions_created_last12months, 13, :created_at)
-    @actions_done_last12monthsPlus3_array = convert_to_months_from_today_array(@actions_done_last12monthsPlus3, 16, :completed_at)
-    @actions_created_last12monthsPlus3_array = convert_to_months_from_today_array(@actions_created_last12monthsPlus3, 16, :created_at)
-    
+    @actions_done_last12months_array = put_events_into_month_buckets(actions_last12months, 13, :completed_at)
+    @actions_created_last12months_array = put_events_into_month_buckets(actions_last12months, 13, :created_at)
+
     # find max for graph in both arrays
-    @max = [@actions_done_last12months_array.max, @actions_created_last12months_array.max].max
+    @max = (@actions_done_last12months_array + @actions_created_last12months_array).max
 
     # find running avg
-    @actions_done_avg_last12months_array, @actions_created_avg_last12months_array =
-      find_running_avg_array(@actions_done_last12monthsPlus3_array, @actions_created_last12monthsPlus3_array, 13)
+    done_in_last_15_months = put_events_into_month_buckets(actions_last12months, 16, :completed_at)
+    created_in_last_15_months = put_events_into_month_buckets(actions_last12months, 16, :created_at)
+
+    @actions_done_avg_last12months_array = compute_running_avg_array(done_in_last_15_months, 13)
+    @actions_created_avg_last12months_array = compute_running_avg_array(created_in_last_15_months, 13)
 
     # interpolate avg for current month.
-    percent_of_month = Time.zone.now.day.to_f / Time.zone.now.end_of_month.day.to_f
-    @interpolated_actions_created_this_month = interpolate_avg(@actions_created_last12months_array, percent_of_month)
-    @interpolated_actions_done_this_month = interpolate_avg(@actions_done_last12months_array, percent_of_month)
+    @interpolated_actions_created_this_month = interpolate_avg_for_current_month(@actions_created_last12months_array)
+    @interpolated_actions_done_this_month = interpolate_avg_for_current_month(@actions_done_last12months_array)
 
+    @created_count_array = Array.new(13, actions_last12months.created_after(@cut_off_year).count(:all)/12.0)
+    @done_count_array    = Array.new(13, actions_last12months.completed_after(@cut_off_year).count(:all)/12.0)
     render :layout => false
+  end
+
+  def interpolate_avg_for_current_month(set)
+    (set[0]*(1/percent_of_month) + set[1] + set[2]) / 3.0
+  end
+
+  def percent_of_month
+    Time.zone.now.day / Time.zone.now.end_of_month.day.to_f
   end
 
   def actions_done_last_years
     @page_title = t('stats.index_title')
-    @chart_width = 900
-    @chart_height = 400
+    @chart = Stats::Chart.new('actions_done_lastyears_data', :height => 400, :width => 900)
   end
 
   def actions_done_lastyears_data
-    @actions_done_last_months = current_user.todos.completed.select("completed_at").reorder("completed_at DESC")
-    @actions_created_last_months = current_user.todos.select("created_at").reorder("created_at DESC" )
+    actions_last_months = current_user.todos.select("completed_at,created_at")
 
-    # query is sorted, so use last todo to calculate number of months
-    @month_count = [difference_in_months(@today, @actions_created_last_months.last.created_at),
-      difference_in_months(@today, @actions_done_last_months.last.completed_at)].max
+    month_count = difference_in_months(@today, actions_last_months.minimum(:created_at))
+    # because this action is not scoped by date, the minimum created_at should always be
+    # less than the minimum completed_at, so no reason to check minimum completed_at
 
     # convert to array and fill in non-existing months
-    @actions_done_last_months_array = convert_to_months_from_today_array(@actions_done_last_months, @month_count+1, :completed_at)
-    @actions_created_last_months_array = convert_to_months_from_today_array(@actions_created_last_months, @month_count+1, :created_at)
+    @actions_done_last_months_array = put_events_into_month_buckets(actions_last_months, month_count+1, :completed_at)
+    @actions_created_last_months_array = put_events_into_month_buckets(actions_last_months, month_count+1, :created_at)
 
     # find max for graph in both hashes
-    @max = [@actions_done_last_months_array.max, @actions_created_last_months_array.max].max
+    @max = (@actions_done_last_months_array + @actions_created_last_months_array).max
 
-    # find running avg
-    @actions_done_avg_last_months_array, @actions_created_avg_last_months_array =
-      find_running_avg_array(@actions_done_last_months_array, @actions_created_last_months_array, @month_count+1)
-
-    # correct last two months since the data of last+1 and last+2 are not available for avg
-    correct_last_two_months(@actions_done_avg_last_months_array, @month_count)
-    correct_last_two_months(@actions_created_avg_last_months_array, @month_count)
+    # set running avg
+    @actions_done_avg_last_months_array = compute_running_avg_array(@actions_done_last_months_array,month_count+1)
+    @actions_created_avg_last_months_array = compute_running_avg_array(@actions_created_last_months_array,month_count+1)
 
     # interpolate avg for this month.
-    percent_of_month = Time.zone.now.day.to_f / Time.zone.now.end_of_month.day.to_f
-    @interpolated_actions_created_this_month = interpolate_avg(@actions_created_last_months_array, percent_of_month)
-    @interpolated_actions_done_this_month = interpolate_avg(@actions_done_last_months_array, percent_of_month)
+    @interpolated_actions_created_this_month = interpolate_avg_for_current_month(@actions_created_last_months_array)
+    @interpolated_actions_done_this_month = interpolate_avg_for_current_month(@actions_done_last_months_array)
+
+    @created_count_array = Array.new(month_count+1, actions_last_months.select { |x| x.created_at }.size/month_count)
+    @done_count_array    = Array.new(month_count+1, actions_last_months.select { |x| x.completed_at }.size/month_count)
 
     render :layout => false
   end
 
   def actions_done_last30days_data
     # get actions created and completed in the past 30 days.
-    @actions_done_last30days = current_user.todos.completed_after(@cut_off_month).select("completed_at")
-    @actions_created_last30days = current_user.todos.created_after(@cut_off_month).select("created_at")
+    @actions_done_last30days = current_user.todos.completed_after(@cut_off_30days).select("completed_at")
+    @actions_created_last30days = current_user.todos.created_after(@cut_off_30days).select("created_at")
 
     # convert to array. 30+1 to have 30 complete days and one current day [0]
     @actions_done_last30days_array = convert_to_days_from_today_array(@actions_done_last30days, 31, :completed_at)
@@ -106,16 +101,16 @@ class StatsController < ApplicationController
     # convert to array and fill in non-existing weeks with 0
     @max_weeks = @actions_completion_time.last ? difference_in_weeks(@today, @actions_completion_time.last.completed_at) : 1
     @actions_completed_per_week_array = convert_to_weeks_running_array(@actions_completion_time, @max_weeks+1)
-        
+
     # stop the chart after 10 weeks
     @count = [10, @max_weeks].min
-    
+
     # convert to new array to hold max @cut_off elems + 1 for sum of actions after @cut_off
     @actions_completion_time_array = cut_off_array_with_sum(@actions_completed_per_week_array, @count)
     @max_actions = @actions_completion_time_array.max
 
-    # get percentage done cummulative
-    @cumm_percent_done = convert_to_cummulative_array(@actions_completion_time_array, @actions_completion_time.count)
+    # get percentage done cumulative
+    @cum_percent_done = convert_to_cumulative_array(@actions_completion_time_array, @actions_completion_time.count(:all))
 
     render :layout => false
   end
@@ -129,14 +124,14 @@ class StatsController < ApplicationController
 
     # cut off chart at 52 weeks = one year
     @count = [52, @max_weeks].min
-    
+
     # convert to new array to hold max @cut_off elems + 1 for sum of actions after @cut_off
     @actions_running_time_array = cut_off_array_with_sum(@actions_running_per_week_array, @count)
     @max_actions = @actions_running_time_array.max
 
-    # get percentage done cummulative
-    @cumm_percent_done = convert_to_cummulative_array(@actions_running_time_array, @actions_running_time.count )
-      
+    # get percentage done cumulative
+    @cum_percent_done = convert_to_cumulative_array(@actions_running_time_array, @actions_running_time.count )
+
     render :layout => false
   end
 
@@ -158,69 +153,47 @@ class StatsController < ApplicationController
 
     # cut off chart at 52 weeks = one year
     @count = [52, @max_weeks].min
-    
+
     # convert to new array to hold max @cut_off elems + 1 for sum of actions after @cut_off
     @actions_running_time_array = cut_off_array_with_sum(@actions_running_per_week_array, @count)
     @max_actions = @actions_running_time_array.max
 
-    # get percentage done cummulative
-    @cumm_percent_done = convert_to_cummulative_array(@actions_running_time_array, @actions_running_time.count )
+    # get percentage done cumulative
+    @cum_percent_done = convert_to_cumulative_array(@actions_running_time_array, @actions_running_time.count )
 
     render :layout => false
   end
-  
+
   def actions_open_per_week_data
     @actions_started = current_user.todos.created_after(@today-53.weeks).
       select("todos.created_at, todos.completed_at").
       reorder("todos.created_at DESC")
-      
+
     @max_weeks = difference_in_weeks(@today, @actions_started.last.created_at)
 
     # cut off chart at 52 weeks = one year
     @count = [52, @max_weeks].min
-    
+
     @actions_open_per_week_array = convert_to_weeks_running_from_today_array(@actions_started, @max_weeks+1)
     @actions_open_per_week_array = cut_off_array(@actions_open_per_week_array, @count)
     @max_actions = (@actions_open_per_week_array.max or 0)
-    
+
     render :layout => false
   end
 
   def context_total_actions_data
-    # get total action count per context Went from GROUP BY c.id to c.name for
-    # compatibility with postgresql. Since the name is forced to be unique, this
-    # should work.
-    all_actions_per_context = current_user.contexts.find_by_sql(
-      "SELECT c.name AS name, c.id as id, count(*) AS total "+
-        "FROM contexts c, todos t "+
-        "WHERE t.context_id=c.id "+
-        "AND c.user_id = #{current_user.id} " +
-        "GROUP BY c.name, c.id "+
-        "ORDER BY total DESC"
-    )
+    actions = Stats::TopContextsQuery.new(current_user).result
 
-    prep_context_data_for_view(all_actions_per_context)
+    @data = Stats::PieChartData.new(actions, t('stats.spread_of_actions_for_all_context'), 70)
 
-    render :layout => false
+    render :pie_chart_data, :layout => false
   end
 
   def context_running_actions_data
-    # get incomplete action count per visible context
-    #
-    # Went from GROUP BY c.id to c.name for compatibility with postgresql. Since
-    # the name is forced to be unique, this should work.
-    all_actions_per_context = current_user.contexts.find_by_sql(
-      "SELECT c.name AS name, c.id as id, count(*) AS total "+
-        "FROM contexts c, todos t "+
-        "WHERE t.context_id=c.id AND t.completed_at IS NULL AND NOT c.hide "+
-        "AND c.user_id = #{current_user.id} " +
-        "GROUP BY c.name, c.id "+
-        "ORDER BY total DESC"
-    )
+    actions = Stats::TopContextsQuery.new(current_user, :running => true).result
+    @data = Stats::PieChartData.new(actions, t('stats.spread_of_running_actions_for_visible_contexts'), 60)
 
-    prep_context_data_for_view(all_actions_per_context)
-
-    render :layout => false
+    render :pie_chart_data, :layout => false
   end
 
   def actions_day_of_week_all_data
@@ -309,7 +282,7 @@ class StatsController < ApplicationController
       week_from = params['index'].to_i
       week_to = week_from+1
 
-      @chart_name = "actions_visible_running_time_data"
+      @chart = Stats::Chart.new('actions_visible_running_time_data')
       @page_title = t('stats.actions_selected_from_week')
       @further = false
       if params['id'] == 'avrt_end'
@@ -334,7 +307,7 @@ class StatsController < ApplicationController
       week_from = params['index'].to_i
       week_to = week_from+1
 
-      @chart_name = "actions_running_time_data"
+      @chart = Stats::Chart.new('actions_running_time_data')
       @page_title = "Actions selected from week "
       @further = false
       if params['id'] == 'art_end'
@@ -350,7 +323,7 @@ class StatsController < ApplicationController
       selected_todo_ids = get_ids_from(@actions_running_time, week_from, week_to, params['id']=='art_end')
       @selected_actions = selected_todo_ids.size == 0 ? [] : current_user.todos.where("id in (#{selected_todo_ids.join(",")})")
       @count = @selected_actions.size
-      
+
       render :action => "show_selection_from_chart"
     else
       # render error
@@ -372,60 +345,8 @@ class StatsController < ApplicationController
 
   private
 
-  def prep_context_data_for_view(all_actions_per_context)
-
-    @sum = all_actions_per_context.inject(0){|sum, apc| sum += apc['total'].to_i }
-
-    pie_cutoff=10
-    size = [all_actions_per_context.size, pie_cutoff].min
-
-    # explicitely copy contents of hash to avoid ending up with two arrays pointing to same hashes
-    @actions_per_context = Array.new(size){|i| {
-      'name' => all_actions_per_context[i][:name],
-      'total' => all_actions_per_context[i][:total].to_i,
-      'id' => all_actions_per_context[i][:id]
-    } }
-
-    if size==pie_cutoff
-      @actions_per_context[size-1]['name']=t('stats.other_actions_label')
-      @actions_per_context[size-1]['total']=@actions_per_context[size-1]['total']
-      @actions_per_context[size-1]['id']=-1
-      size.upto(all_actions_per_context.size-1){ |i| @actions_per_context[size-1]['total']+=(all_actions_per_context[i]['total'].to_i) }
-    end
-
-    @truncate_chars = 15
-  end
-
-  def get_unique_tags_of_user
-    tag_ids = current_user.todos.find_by_sql([
-        "SELECT DISTINCT tags.id as id "+
-          "FROM tags, taggings, todos "+
-          "WHERE tags.id = taggings.tag_id " +
-          "AND taggings.taggable_id = todos.id "+
-          "AND todos.user_id = #{current_user.id}"])
-    tags_ids_s = tag_ids.map(&:id).sort.join(",")
-    return {} if tags_ids_s.blank?  # return empty hash for .size to work
-    return Tag.where("id in (#{tags_ids_s})")
-  end
-
-  def get_total_number_of_tags_of_user
-    # same query as get_unique_tags_of_user except for the DISTINCT
-    return current_user.todos.find_by_sql([
-        "SELECT tags.id as id "+
-          "FROM tags, taggings, todos "+
-          "WHERE tags.id = taggings.tag_id " +
-          "AND taggings.taggable_id = todos.id " +
-          "AND todos.user_id = #{current_user.id}"]).size
-  end
-
   def init
     @me = self # for meta programming
-
-    # default chart dimensions
-    @chart_width=460
-    @chart_height=250
-    @pie_width=@chart_width
-    @pie_height=325
 
     # get the current date wih time set to 0:0
     @today = Time.zone.now.utc.beginning_of_day
@@ -434,173 +355,7 @@ class StatsController < ApplicationController
     @cut_off_year = 12.months.ago.beginning_of_day
     @cut_off_year_plus3 = 15.months.ago.beginning_of_day
     @cut_off_month = 1.month.ago.beginning_of_day
-    @cut_off_3months = 3.months.ago.beginning_of_day
-  end
-
-  def get_stats_actions
-    # time to complete
-    @completed_actions = current_user.todos.completed.select("completed_at, created_at")
-
-    actions_sum, actions_max = 0,0
-    actions_min = @completed_actions.first ? @completed_actions.first.completed_at - @completed_actions.first.created_at : 0
-    
-    @completed_actions.each do |r|
-      actions_sum += (r.completed_at - r.created_at)
-      actions_max = [(r.completed_at - r.created_at), actions_max].max
-      actions_min = [(r.completed_at - r.created_at), actions_min].min
-    end
-
-    sum_actions = @completed_actions.size
-    sum_actions = 1 if sum_actions==0 # to prevent dividing by zero
-
-    @actions_avg_ttc = (actions_sum/sum_actions)/SECONDS_PER_DAY
-    @actions_max_ttc = actions_max/SECONDS_PER_DAY
-    @actions_min_ttc = actions_min/SECONDS_PER_DAY
-
-    min_ttc_sec = Time.utc(2000,1,1,0,0)+actions_min # convert to a datetime
-    @actions_min_ttc_sec = (min_ttc_sec).strftime("%H:%M:%S")
-    @actions_min_ttc_sec = (actions_min / SECONDS_PER_DAY).round.to_s + " days " + @actions_min_ttc_sec if actions_min > SECONDS_PER_DAY
-
-    # get count of actions created and actions done in the past 30 days.
-    @sum_actions_done_last30days = current_user.todos.completed.completed_after(@cut_off_month).count
-    @sum_actions_created_last30days = current_user.todos.created_after(@cut_off_month).count
-
-    # get count of actions done in the past 12 months.
-    @sum_actions_done_last12months = current_user.todos.completed.completed_after(@cut_off_year).count
-    @sum_actions_created_last12months = current_user.todos.created_after(@cut_off_year).count
-  end
-
-  def get_stats_contexts
-    # get action count per context for TOP 5
-    #
-    # Went from GROUP BY c.id to c.id, c.name for compatibility with postgresql.
-    # Since the name is forced to be unique, this should work.
-    @actions_per_context = current_user.contexts.find_by_sql(
-      "SELECT c.id AS id, c.name AS name, count(*) AS total "+
-        "FROM contexts c, todos t "+
-        "WHERE t.context_id=c.id "+
-        "AND t.user_id=#{current_user.id} " +
-        "GROUP BY c.id, c.name ORDER BY total DESC " +
-        "LIMIT 5"
-    )
-
-    # get incomplete action count per visible context for TOP 5
-    #
-    # Went from GROUP BY c.id to c.id, c.name for compatibility with postgresql.
-    # Since the name is forced to be unique, this should work.
-    @running_actions_per_context = current_user.contexts.find_by_sql(
-      "SELECT c.id AS id, c.name AS name, count(*) AS total "+
-        "FROM contexts c, todos t "+
-        "WHERE t.context_id=c.id AND t.completed_at IS NULL AND NOT c.hide "+
-        "AND t.user_id=#{current_user.id} " +
-        "GROUP BY c.id, c.name ORDER BY total DESC " +
-        "LIMIT 5"
-    )
-  end
-
-  def get_stats_projects
-    # get the first 10 projects and their action count (all actions)
-    #
-    # Went from GROUP BY p.id to p.name for compatibility with postgresql. Since
-    # the name is forced to be unique, this should work.
-    @projects_and_actions = current_user.projects.find_by_sql(
-      "SELECT p.id, p.name, count(*) AS count "+
-        "FROM projects p, todos t "+
-        "WHERE p.id = t.project_id "+
-        "AND t.user_id=#{current_user.id} " +
-        "GROUP BY p.id, p.name "+
-        "ORDER BY count DESC " +
-        "LIMIT 10"
-    )
-
-    # get the first 10 projects with their actions count of actions that have
-    # been created or completed the past 30 days
-
-    # using GROUP BY p.name (was: p.id) for compatibility with Postgresql. Since
-    # you cannot create two contexts with the same name, this will work.
-    @projects_and_actions_last30days = current_user.projects.find_by_sql([
-        "SELECT p.id, p.name, count(*) AS count "+
-          "FROM todos t, projects p "+
-          "WHERE t.project_id = p.id AND "+
-          "      (t.created_at > ? OR t.completed_at > ?) "+
-          "AND t.user_id=#{current_user.id} " +
-          "GROUP BY p.id, p.name "+
-          "ORDER BY count DESC " +
-          "LIMIT 10", @cut_off_month, @cut_off_month]
-    )
-
-    # get the first 10 projects and their running time (creation date versus
-    # now())
-    @projects_and_runtime_sql = current_user.projects.find_by_sql(
-      "SELECT id, name, created_at "+
-        "FROM projects "+
-        "WHERE state='active' "+
-        "AND user_id=#{current_user.id} "+
-        "ORDER BY created_at ASC "+
-        "LIMIT 10"
-    )
-
-    i=0
-    @projects_and_runtime = Array.new(10, [-1, t('common.not_available_abbr'), t('common.not_available_abbr')])
-    @projects_and_runtime_sql.each do |r|
-      days = difference_in_days(@today, r.created_at)
-      # add one so that a project that you just created returns 1 day
-      @projects_and_runtime[i]=[r.id, r.name, days.to_i+1]
-      i += 1
-    end
-
-  end
-
-  def get_stats_tags
-    # tag cloud code inspired by this article
-    #  http://www.juixe.com/techknow/index.php/2006/07/15/acts-as-taggable-tag-cloud/
-
-    levels=10
-    # TODO: parameterize limit
-
-    # Get the tag cloud for all tags for actions
-    query = "SELECT tags.id, name, count(*) AS count"
-    query << " FROM taggings, tags, todos"
-    query << " WHERE tags.id = tag_id"
-    query << " AND taggings.taggable_id = todos.id"
-    query << " AND todos.user_id="+current_user.id.to_s+" "
-    query << " AND taggings.taggable_type='Todo' "
-    query << " GROUP BY tags.id, tags.name"
-    query << " ORDER BY count DESC, name"
-    query << " LIMIT 100"
-    @tags_for_cloud = Tag.find_by_sql(query).sort_by { |tag| tag.name.downcase }
-
-    max, @tags_min = 0, 0
-    @tags_for_cloud.each { |t|
-      max = [t.count.to_i, max].max
-      @tags_min = [t.count.to_i, @tags_min].min
-    }
-
-    @tags_divisor = ((max - @tags_min) / levels) + 1
-
-    # Get the tag cloud for all tags for actions
-    query = "SELECT tags.id, tags.name AS name, count(*) AS count"
-    query << " FROM taggings, tags, todos"
-    query << " WHERE tags.id = tag_id"
-    query << " AND todos.user_id=? "
-    query << " AND taggings.taggable_type='Todo' "
-    query << " AND taggings.taggable_id=todos.id "
-    query << " AND (todos.created_at > ? OR "
-    query << "      todos.completed_at > ?) "
-    query << " GROUP BY tags.id, tags.name"
-    query << " ORDER BY count DESC, name"
-    query << " LIMIT 100"
-    @tags_for_cloud_90days = Tag.find_by_sql(
-      [query, current_user.id, @cut_off_3months, @cut_off_3months]
-    ).sort_by { |tag| tag.name.downcase }
-
-    max_90days, @tags_min_90days = 0, 0
-    @tags_for_cloud_90days.each { |t|
-      max_90days = [t.count.to_i, max_90days].max
-      @tags_min_90days = [t.count.to_i, @tags_min_90days].min
-    }
-
-    @tags_divisor_90days = ((max_90days - @tags_min_90days) / levels) + 1
+    @cut_off_30days = 30.days.ago.beginning_of_day
   end
 
   def get_ids_from (actions, week_from, week_to, at_end)
@@ -621,16 +376,15 @@ class StatsController < ApplicationController
   # uses the supplied block to determine array of indexes in hash
   # the block should return an array of indexes each is added to the hash and summed
   def convert_to_array(records, upper_bound)
-    # use 0 to initialise action count to zero
-    a = Array.new(upper_bound){|i| 0 }
-    records.each { |r| (yield r).each { |i| a[i] += 1 } }
-    return a
+    a = Array.new(upper_bound, 0)
+    records.each { |r| (yield r).each { |i| a[i] += 1 if a[i] } }
+    a
   end
-  
-  def convert_to_months_from_today_array(records, array_size, date_method_on_todo)
-    return convert_to_array(records, array_size){ |r| [difference_in_months(@today, r.send(date_method_on_todo))]}
+
+  def put_events_into_month_buckets(records, array_size, date_method_on_todo)
+    convert_to_array(records.select { |x| x.send(date_method_on_todo) }, array_size) { |r| [difference_in_months(@today, r.send(date_method_on_todo))]}
   end
-  
+
   def convert_to_days_from_today_array(records, array_size, date_method_on_todo)
     return convert_to_array(records, array_size){ |r| [difference_in_days(@today, r.send(date_method_on_todo))]}
   end
@@ -646,7 +400,7 @@ class StatsController < ApplicationController
   def convert_to_weeks_running_from_today_array(records, array_size)
     return convert_to_array(records, array_size) { |r| week_indexes_of(r) }
   end
-  
+
   def week_indexes_of(record)
     a = []
     start_week = difference_in_weeks(@today, record.created_at)
@@ -654,7 +408,7 @@ class StatsController < ApplicationController
     end_week.upto(start_week) { |i| a << i };
     return a
   end
-  
+
   # returns a new array containing all elems of array up to cut_off and
   # adds the sum of the rest of array to the last elem
   def cut_off_array_with_sum(array, cut_off)
@@ -664,15 +418,15 @@ class StatsController < ApplicationController
     a[cut_off] += array.inject(:+) - a.inject(:+)
     return a
   end
-  
+
   def cut_off_array(array, cut_off)
     return Array.new(cut_off){|i| array[i]||0}
   end
 
-  def convert_to_cummulative_array(array, max)
+  def convert_to_cumulative_array(array, max)
     # calculate fractions
     a = Array.new(array.size){|i| array[i]*100.0/max}
-    # make cummulative
+    # make cumulative
     1.upto(array.size-1){ |i| a[i] += a[i-1] }
     return a
   end
@@ -687,31 +441,27 @@ class StatsController < ApplicationController
   def difference_in_days(date1, date2)
     return ((date1.utc.at_midnight-date2.utc.at_midnight)/SECONDS_PER_DAY).to_i
   end
-  
+
   # assumes date1 > date2
   def difference_in_weeks(date1, date2)
     return difference_in_days(date1, date2) / 7
   end
 
   def three_month_avg(set, i)
-    return ( (set[i]||0) + (set[i+1]||0) + (set[i+2]||0) ) / 3.0
+    (set.fetch(i,0) + set.fetch(i+1,0) + set.fetch(i+2,0)) / 3.0
   end
 
-  def interpolate_avg(set, percent)
-    return (set[0]*(1/percent) + set[1] + set[2]) / 3.0
+  def set_three_month_avg(set,upper_bound)
+    (0..upper_bound-1).map { |i| three_month_avg(set, i) }
   end
 
-  def correct_last_two_months(month_data, count)
-    month_data[count] = month_data[count] * 3
-    month_data[count-1] = month_data[count-1] * 3 / 2 if count > 1
-  end
-
-  def find_running_avg_array(done_array, created_array, upper_bound)
-    avg_done    = Array.new(upper_bound){ |i| three_month_avg(done_array,i) }
-    avg_created = Array.new(upper_bound){ |i| three_month_avg(created_array,i) }
-    avg_done[0] = avg_created[0] = "null"
-    
-    return avg_done, avg_created
-  end
+  # sets "null" on first column and - if necessary - cleans up last two columns, which may have insufficient data
+  def compute_running_avg_array(set, upper_bound)
+    result = set_three_month_avg(set, upper_bound)
+    result[upper_bound-1] = result[upper_bound-1] * 3 if upper_bound == set.length
+    result[upper_bound-2] = result[upper_bound-2] * 3 / 2 if upper_bound > 1 and upper_bound == set.length
+    result[0] = "null"
+    result
+  end # unsolved, not triggered, edge case for set.length == upper_bound + 1
 
 end

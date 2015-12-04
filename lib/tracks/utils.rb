@@ -22,26 +22,27 @@ module Tracks
     end
 
     def self.render_text(text)
-      rendered = Tracks::Utils.auto_link_message(text)
-      rendered = markdown(rendered)
+      rendered = auto_link_message(text)
+      rendered = textile(rendered)
       rendered = helpers.auto_link(rendered, :link => :urls)
 
       # add onenote and message protocols
-      Sanitize::Config::RELAXED[:protocols]['a']['href'] << 'onenote'
-      Sanitize::Config::RELAXED[:protocols]['a']['href'] << 'message'
+      config = Sanitize::Config.merge(Sanitize::Config::RELAXED,
+        :protocols => { 'a' => {'href' => Sanitize::Config::RELAXED[:protocols]['a']['href'] + ['onenote', 'message']}}
+        )
   
-      rendered = Sanitize.clean(rendered, Sanitize::Config::RELAXED)
+      rendered = Sanitize.clean(rendered, config)
       return rendered.html_safe
     end
     
-    # Uses RedCloth to transform text using either Textile or Markdown Need to
-    # require redcloth above RedCloth 3.0 or greater is needed to use Markdown,
-    # otherwise it only handles Textile
-    #
-    def self.markdown(text)
+    def self.textile(text)
       RedCloth.new(text).to_html
     end
     
+    def self.sanitize_filename(filename)
+      filename.gsub(/[^0-9A-z.\-]/, '_')
+    end
+
     private
     
     def self.helpers
